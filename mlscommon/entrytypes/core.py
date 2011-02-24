@@ -45,7 +45,7 @@ class Cell(Document):
         # ensure that shared_with has values only for one cell in a tree
         if len(self.shared_with) and Cell.objects.filter(pk__in = self.roots,
                                                          roots__not__size = 0).count():
-            raise MongoValidationError()
+            raise MongoValidationError("Multiple shares in the same tree")
 
         # ensure that name and roots are unique
         if len(self.roots):
@@ -54,26 +54,33 @@ class Cell(Document):
                                                roots__in = self.roots,
                                                pk__ne = self.pk
                                                ).count():
-                raise MongoValidationError()
+                raise MongoValidationError("Name is not unique")
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      roots__size = len(self.roots),
                                                      roots__in = self.roots,
                                                      ).count():
-                raise MongoValidationError()
+                raise MongoValidationError("Name is not unique")
 
 
         # or if roots = [] ensure that name and owner are unique
         else:
-            if Cell.objects.filter(name = self.name,
-                                   owner = self.owner,
-                                   roots__size = 0,
-                                   pk__ne = self.pk
-                                   ).count():
-                raise MongoValidationError()
+            if self.pk and Cell.objects.filter(name = self.name,
+                                               owner = self.owner,
+                                               roots__size = 0,
+                                               pk__ne = self.pk
+                                               ).count():
+                raise MongoValidationError("Name is not unique")
+            elif not self.pk and Cell.objects.filter(name = self.name,
+                                                     owner = self.owner,
+                                                     roots__size = 0,
+                                                     ).count():
+                raise MongoValidationError("Name is not unique")
 
     def delete(self):
         # delete all related droplets
-        Droplet.objects.filter(cell = self).delete()
+        map(lambda x: x.delete(), Droplet.objects.filter(cell=self))
+        map(lambda x: x.delete(), Cell.objects(roots__contains = self.pk))
+
         super(Cell, self).delete()
 
 class Revision(EmbeddedDocument):
@@ -117,7 +124,6 @@ class Droplet(Document):
         revisions we must first check that the content is not used
         anywhere else.
         """
-        for revision in self.revisions:
-            revision.content.delete()
+        map(lambda x: x.content.delete(), self.revisions)
 
         super(Droplet, self).delete()
