@@ -15,6 +15,7 @@ from django.core.validators import MinValueValidator
 from django.core.validators import MinValueValidator
 
 import time
+import re
 
 from piston.decorator import decorator
 
@@ -390,13 +391,10 @@ class CellShareHandler(BaseHandler):
 
         if root:
             if request.form.cleaned_data.get('user'):
-                print "mpou"
                 if Cell.objects(pk=root.pk).update(pull__shared_with = \
                                                    Share(user=request.form.cleaned_data.get('user'))) != 1:
-                    print "not found!"
                     return rc.NOT_FOUND
             else:
-                print "mpe"
                 Cell.objects(pk=root.pk).update(set__shared_with=[])
         else:
             return rc.NOT_FOUND
@@ -480,6 +478,32 @@ class UserCreateForm(forms.Form):
     last_name = forms.CharField(max_length=30, required=False)
     email = forms.EmailField(max_length=30)
 
+    def clean(self):
+        super(UserCreateForm, self).clean()
+
+        # check hash
+        if self.is_valid() and not re.match("\w+$", self.cleaned_data['username']):
+            raise ValidationError("Not valid username")
+
+        return self.cleaned_data
+
+class UserUpdateForm(forms.Form):
+    username = forms.CharField(max_length=30, min_length=3, required=False)
+    password = forms.CharField(max_length=30, min_length=3, required=False)
+    first_name = forms.CharField(max_length=30, required=False)
+    last_name = forms.CharField(max_length=30, required=False)
+    email = forms.EmailField(max_length=30, required=False)
+
+    def clean(self):
+        super(UserUpdateForm, self).clean()
+
+        # check hash
+        if self.is_valid() and not re.match("\w+$", self.cleaned_data['username']):
+            raise ValidationError("Not valid username")
+
+        return self.cleaned_data
+
+
 class AnonymousUserHandler(AnonymousBaseHandler):
     model = User
     allowed_methods = ('POST', )
@@ -503,6 +527,7 @@ class UserHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = User
     anonymous = AnonymousUserHandler
+    fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
 
     @add_server_timestamp
     @watchdog_notfound
@@ -512,7 +537,7 @@ class UserHandler(BaseHandler):
         else:
             user = User.objects.get(username=username)
 
-        if request.user.is_staff or request.user == user:
+        if request.user.is_staff or request.user.is_superuser or request.user == user:
             return user
         else:
             return rc.FORBIDDEN
@@ -520,7 +545,7 @@ class UserHandler(BaseHandler):
     @add_server_timestamp
     @validate(UserCreateForm, ('POST',))
     def create(self, request):
-        if request.user.is_staff:
+        if request.user.is_staff or request.user.is_superuser:
             user = User.create_user(request.form.cleaned_data['username'],
                                     request.form.cleaned_data['password'],
                                     request.form.cleaned_data['email']
@@ -532,15 +557,27 @@ class UserHandler(BaseHandler):
         else:
             return rc.FORBIDDEN
 
-    @validate(UserCreateForm, ('POST',))
+    @add_server_timestamp
+    @validate(UserUpdateForm, ('POST',))
     def update(self, request, username):
         user = User.objects.get(username=username)
-        if request.user.is_staff or request.user == user:
+
+        if request.user.is_staff or request.user.is_superuser or request.user == user:
             user.username = request.form.cleaned_data.get('username') or user.username
             user.password = request.form.cleaned_data.get('password') or user.password
             user.email = request.form.cleaned_data.get('email') or user.email
             user.first_name = request.form.cleaned_data.get('first_name') or user.first_name
             user.last_name = request.form.cleaned_data.get('last_name') or user.last_name
+            user.save()
             return user
+        else:
+            return rc.FORBIDDEN
+
+    def delete(self, request, username):
+
+        user = User.objects.get(username=username)
+        if request.user.is_staff or request.user.is_superuser or request.user == user:
+            user.delete()
+            return rc.DELETED
         else:
             return rc.FORBIDDEN
