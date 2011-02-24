@@ -122,12 +122,14 @@ def check_write_permission(function, self, request, *args, **kwargs):
     """
     cell = None
     if isinstance(self, CellHandler):
-        if request.META['REQUEST_METHOD'] == 'PUT':
+        if request.META['REQUEST_METHOD'] in ('PUT', 'DELETE'):
             # check cell
             cell = Cell.objects.get(pk = args[0])
             if not _check_write_permission_obj(cell, request.user):
                 return rc.FORBIDDEN
 
+        # for create and update. in general when 'parent' is present
+        # we must check that we can write to him
         if 'parent' in request.POST:
             # check parent
             parent = Cell.objects.get(pk = request.POST['parent'])
@@ -441,6 +443,7 @@ class CellHandler(BaseHandler):
                  name = request.form.cleaned_data['name'],
                  roots = roots
                  )
+
         c.save()
         return c
 
@@ -450,7 +453,7 @@ class CellHandler(BaseHandler):
     @watchdog_notfound
     def update(self, request, cell_id):
         cell = Cell.objects.get(pk=cell_id)
-        cell.name = request.form.cleaned_data.get('name', cell.name)
+        cell.name = request.form.cleaned_data.get('name') or cell.name
         cell.save()
 
         if len(request.form.cleaned_data.get('parent', '')):
@@ -459,6 +462,7 @@ class CellHandler(BaseHandler):
             q.update(pull_all__roots = cell.roots)
             q.update(push_all__roots = parent.roots + [parent])
 
+        cell.reload()
         return cell
 
     @add_server_timestamp
