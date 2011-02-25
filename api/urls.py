@@ -22,6 +22,7 @@ urlpatterns = patterns(
     '',
     (r'^cell/(?P<cell_id>\w+)/$', cell_handler),
     (r'^cell/(?P<cell_id>\w+)/share/$', cell_share_handler),
+    (r'^cell/(?P<cell_id>\w+)/share/(?P<username>\w+)/$', cell_share_handler),
     (r'^cell/$', cell_handler),
 
     (r'^droplet/(?P<droplet_id>\w+)/$', droplet_handler),

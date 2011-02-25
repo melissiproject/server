@@ -1,8 +1,6 @@
 from piston.handler import BaseHandler, AnonymousBaseHandler
 from piston.utils import rc, FormValidationError
 from django.shortcuts import get_object_or_404, get_list_or_404
-# TODO
-# from django.core.files.storage import default_storage
 from django import forms
 from mongoengine.queryset import DoesNotExist
 from mongoengine.base import ValidationError as MongoValidationError
@@ -138,10 +136,19 @@ def check_write_permission(function, self, request, *args, **kwargs):
 
     elif isinstance(self, CellShareHandler):
         cell = Cell.objects.get(pk = args[0])
-        root = Cell.objects.get(pk__in = cell.roots + [cell],
-                                shared_with__not__size = 0)
-        if root.owner.pk != request.user.pk:
-            return rc.FORBIDDEN
+        try:
+            root = Cell.objects.get(pk__in = cell.roots + [cell],
+                                    shared_with__not__size = 0)
+        except DoesNotExist, error:
+            if cell.owner.pk != request.user.pk:
+                return rc.FORBIDDEN
+        else:
+            if root.owner.pk != request.user.pk and \
+                   request.META['REQUEST_METHOD'] != 'DELETE':
+                # DELETE is special case, because user can delete himself
+                # from a share, without being owner of the root cell
+                # Permission checks MUST be done at ShareHandler delete()
+                return rc.FORBIDDEN
 
     elif isinstance(self, DropletHandler):
         if request.META['REQUEST_METHOD'] in ('DELETE', 'PUT') :
@@ -380,16 +387,34 @@ class DropletHandler(BaseHandler):
         map(lambda x: x.delete(), Droplet.objects(pk=droplet_id))
         return rc.DELETED
 
-class CellShareUpdateForm(forms.Form):
-    user = forms.CharField(max_length=500, required=False)
+class CellShareForm(forms.Form):
+    def clean(self):
+        if self.data.get('mode') and self.data['mode'] not in ['wara', 'wnra']:
+            raise ValidationError("invalid share mode")
+
+        super(CellShareForm, self).clean()
+
+        if self.cleaned_data.get('user'):
+            self.cleaned_data['user'] = User.objects.get(
+                username=self.cleaned_data['user']
+                )
+
+        return self.cleaned_data
+
+class CellShareCreateForm(CellShareForm):
+    user = forms.CharField(max_length=500, required=True)
     mode = forms.CharField(required=True)
 
-class CellShareDeleteForm(forms.Form):
+class CellShareUpdateForm(CellShareForm):
+    user = forms.CharField(max_length=500, required=True)
+    mode = forms.CharField(required=True)
+
+class CellShareDeleteForm(CellShareForm):
     user = forms.CharField(max_length=500, required=False)
 
 class CellShareHandler(BaseHandler):
     model = Share
-    allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
+    allowed_methods = ('GET', 'POST', 'DELETE')
     depth = 2
 
     @add_server_timestamp
@@ -404,26 +429,37 @@ class CellShareHandler(BaseHandler):
         else:
             return {}
 
-    def create(self, request):
-        pass
-
     @add_server_timestamp
     @check_write_permission
-    @validate(CellShareUpdateForm, ('POST',))
+    @validate(CellShareCreateForm, ('POST',))
     @watchdog_notfound
-    def update(self, request, cell_id):
-        """ Currntly only one user per time """
-        cell = Cell.objects.get(pk=cell_id)
+    def create(self, request, cell_id):
+        """ If user not in shared_with add him. If user in shared_with update entry """
+        user = request.form.cleaned_data['user']
+        share = Share(user=user, mode=request.form.cleaned_data['mode'])
 
+        # check that a root is not shared
+        cell = Cell.objects.get(pk=cell_id)
+        if Cell.objects.filter(pk__in = cell.roots,
+                               shared_with__not__size = 0).count():
+            return rc.BAD_REQUEST
+
+        # remove previous entry, if any
+        # (creating a Share object without mode results into all
+        # shares of that user to be matched. mode is ignored)
+        Cell.objects(pk=cell_id).update(pull__shared_with=Share(user=user))
+        Cell.objects(pk=cell_id).update(push__shared_with=share)
+
+        return rc.CREATED
 
     @add_server_timestamp
     @check_write_permission
     @validate(CellShareDeleteForm, ('POST',))
     @watchdog_notfound
-    def delete(self, request, cell_id):
+    def delete(self, request, cell_id, username=None):
         """ Currently only owner can change stuff
 
-        TODO We cannot POST data probably due to a django bug.
+        TODO We read POST data probably due to a django bug.
         So everytime we use this function we delete the whole shared_with set
 
         """
@@ -431,15 +467,23 @@ class CellShareHandler(BaseHandler):
         root = Cell.objects.get(pk__in = cell.roots + [cell],
                                 shared_with__not__size = 0)
 
-        if root:
-            if request.form.cleaned_data.get('user'):
-                if Cell.objects(pk=root.pk).update(pull__shared_with = \
-                                                   Share(user=request.form.cleaned_data.get('user'))) != 1:
-                    return rc.NOT_FOUND
-            else:
-                Cell.objects(pk=root.pk).update(set__shared_with=[])
+        if username:
+            user = User.objects.get(username=username)
+            if request.user.pk != root.owner.pk and request.user.pk != user.pk:
+                # user is not owner and tries to delete another user
+                # from share
+                return rc.FORBIDDEN
+
+            if Cell.objects(pk=root.pk).update(pull__shared_with = \
+                                               Share(user=user)) != 1:
+                return rc.NOT_FOUND
+
         else:
-            return rc.NOT_FOUND
+            # only owner can delete everything
+            if request.user.pk == root.owner.pk:
+                Cell.objects(pk=root.pk).update(set__shared_with=[])
+            else:
+                return rc.FORBIDDEN
 
         return rc.DELETED
 

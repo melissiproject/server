@@ -1360,3 +1360,388 @@ class RevisionTest(AuthTestCase):
 
         return dic
 
+
+
+class ShareTest(AuthTestCase):
+    def setUp(self):
+        self.users = {
+            'user' : self.create_user(),
+            'admin' : self.create_superuser(),
+            'anonymous': self.create_anonymous(),
+            'owner': self.create_user("foo", "foo@example.com"),
+            'partner': self.create_user("bar", "bar@example.com"),
+            }
+
+    @test_multiple_users
+    def test_share_cell(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="c1", owner=u)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup':setup,
+            'teardown': self.teardown,
+            'postdata': { 'user': 'bar',
+                          'mode': 'wara',
+                          },
+            'response_code': { 'user': 401,
+                               'admin': 401,
+                               'anonymous': 401,
+                               'owner': 201,
+                               'partner': 401,
+                               },
+            'users': self.users,
+            'method': 'post',
+            'url': '/api/cell/%(cell_id)s/share/'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_denied_share_cell(self):
+        """ deny double share root """
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user=u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            c1 = Cell(name="c2", owner=u, roots= [c])
+            c1.save()
+
+            return { 'cell_id': c1.pk }
+
+        dic = {
+            'setup':setup,
+            'teardown': self.teardown,
+            'postdata': { 'user': 'bar',
+                          'mode': 'wara',
+                          },
+            'response_code': { 'user': 401,
+                               'admin': 401,
+                               'anonymous': 401,
+                               'owner': 400,
+                               'partner': 401,
+                               },
+            'users': self.users,
+            'method': 'post',
+            'url': '/api/cell/%(cell_id)s/share/'
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_read_shares(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/cell/%(cell_id)s/share/',
+            'response_code': { 'user': 401,
+                               'admin': 401,
+                               'anonymous': 401,
+                               'owner': 200,
+                               'partner': 401,
+                               },
+            'content': 'bar',
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_read_shared_cell(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1.save()
+
+            return { 'cell_id': c1.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/cell/%(cell_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              'partner': 200,
+                              },
+            'content': '%(cell_id)s'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_read_shared_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1.save()
+
+            d = Droplet(owner=u, cell=c1, name="lala")
+            d.save()
+
+            return { 'droplet_id': d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/droplet/%(droplet_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              'partner': 200,
+                              },
+            'content': '%(droplet_id)s'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_write_shared_cell(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'users': self.users,
+            'postdata': { 'name':'newname' },
+            'url': '/api/cell/%(cell_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              'partner': 200,
+                              },
+            'content': 'newname'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_write_shared_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            d = Droplet(owner=u, cell=c, name="lala")
+            d.save()
+
+            return { 'droplet_id': d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'users': self.users,
+            'postdata': { 'name':'newname' },
+            'url': '/api/droplet/%(droplet_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              'partner': 200,
+                              },
+            'content': 'newname'
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_delete_share_cell(self):
+        """ delete all """
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        def extra_checks():
+            # c = Cell.objects.get(name="c1")
+            # self.assertEqual(len(c.shared_with), 0)
+            pass
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'delete',
+            'users': self.users,
+            'url': '/api/cell/%(cell_id)s/share/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 204,
+                              'partner': 401,
+                              },
+            'checks': { 'owner' : extra_checks },
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_delete_share_user(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        def extra_checks():
+            c = Cell.objects.get(name="c1")
+            self.assertEqual(len(c.shared_with), 0)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'delete',
+            'users': self.users,
+            'url': '/api/cell/%(cell_id)s/share/bar/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 204,
+                              'partner': 204,
+                              },
+            'checks': { 'owner' : extra_checks },
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_delete_share_user2(self):
+        """ User who is in shared_with list and his not owner
+        tries to delete another user in shared_with list
+        """
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            u2 = User.create_user("sharetest", "123", "test@example.com")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            s1 = Share(user = u2, mode='wara')
+            c.shared_with.append(s1)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        def teardown():
+            User.objects(username="sharetest").delete()
+            self.teardown()
+
+        def extra_checks():
+            c = Cell.objects.get(name="c1")
+            self.assertEqual(len(c.shared_with), 1)
+
+        dic = {
+            'setup': setup,
+            'teardown': teardown,
+            'method': 'delete',
+            'users': self.users,
+            'url': '/api/cell/%(cell_id)s/share/sharetest/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 204,
+                              'partner': 401,
+                              },
+            'checks': { 'owner' : extra_checks },
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_update_share_cell(self):
+        """ update mode for user """
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="bar")
+            c = Cell(name="c1", owner=u)
+            s = Share(user = u1, mode='wara')
+            c.shared_with.append(s)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        def extra_checks():
+            c = Cell.objects.get(name="c1")
+            self.assertEqual(len(c.shared_with), 1)
+            self.assertEqual(c.shared_with[0].mode, 'wnra')
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'post',
+            'users': self.users,
+            'postdata': { 'user':'bar',
+                          'mode':'wnra'
+                          },
+            'url': '/api/cell/%(cell_id)s/share/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 201,
+                              'partner': 401,
+                              },
+            'checks': { 'owner' : extra_checks },
+            }
+
+        return dic
