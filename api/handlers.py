@@ -18,7 +18,7 @@ import re
 from piston.decorator import decorator
 
 from mlscommon.entrytypes import Droplet, Cell, Revision, Share
-from mlscommon.common import calculate_md5, patch_file
+from mlscommon.common import calculate_md5, patch_file, sendfile
 
 import settings
 
@@ -77,7 +77,6 @@ def check_read_permission(function, self, request, *args, **kwargs):
     """Check that the user has read permission
 
     """
-
     cell = None
 
     if isinstance(self, CellHandler):
@@ -118,6 +117,7 @@ def check_write_permission(function, self, request, *args, **kwargs):
     """Check that the user has read permission
 
     """
+
     cell = None
     if isinstance(self, CellHandler):
         if request.META['REQUEST_METHOD'] in ('PUT', 'DELETE'):
@@ -284,10 +284,7 @@ class RevisionHandler(BaseHandler):
 
         return rc.DELETED
 
-
 class RevisionContentHandler(BaseHandler):
-    allowed_methods = ('GET',)
-
     @check_read_permission
     @watchdog_notfound
     def read(self, request, droplet_id, revision_id=None):
@@ -300,9 +297,10 @@ class RevisionContentHandler(BaseHandler):
             return rc.BAD_REQUEST
 
         try:
-            return droplet.revisions[revision_id].content.read()
+            return sendfile(droplet.revisions[revision_id].content, droplet.name)
         except IndexError:
             return rc.NOT_FOUND
+
 
 class RevisionPatchHandler(BaseHandler):
     allowed_methods = ('GET',)
@@ -321,7 +319,7 @@ class RevisionPatchHandler(BaseHandler):
             return rc.BAD_REQUEST
 
         try:
-            return droplet.revisions[revision_id].patch.read()
+            return sendfile(droplet.revisions[revision_id].patch, "%s.patch" % droplet.name)
         except IndexError:
             return rc.NOT_FOUND
 
@@ -669,3 +667,25 @@ class UserHandler(BaseHandler):
             return rc.DELETED
         else:
             return rc.FORBIDDEN
+
+class StatusHandler(BaseHandler):
+    allowed_methods = ('GET', )
+
+    def read(self, request):
+        s = Share(user=request.user, mode='wara')
+        s1 = Share(user=request.user, mode='wnra')
+        cells = Cell.objects.filter( Q(owner=request.user) |
+                                     Q(shared_with__contains = s1) |
+                                     Q(shared_with__contains = s)
+                                     )
+        c = Cell.objects.filter( Q(pk__in = cells) | Q(roots__in = cells) )
+
+        cells = []
+        map(lambda x: cells.append(x), c)
+        droplets = []
+        map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c))
+
+        return {'cells': cells, 'droplets': droplets }
+
+
+
