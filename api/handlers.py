@@ -144,13 +144,15 @@ def check_write_permission(function, self, request, *args, **kwargs):
             return rc.FORBIDDEN
 
     elif isinstance(self, DropletHandler):
-        if request.META['REQUEST_METHOD'] == 'DELETE':
+        if request.META['REQUEST_METHOD'] in ('DELETE', 'PUT') :
             droplet = Droplet.objects.get(pk = args[0])
             cell = droplet.cell
-        elif request.META['REQUEST_METHOD'] == 'POST':
-            cell = Cell.objects.get(pk = request.POST['cell'])
+            if not _check_write_permission_obj(cell, request.user):
+                return rc.FORBIDDEN
 
-        if not _check_write_permission_obj(cell, request.user):
+        if 'cell' in request.POST:
+            cell = Cell.objects.get(pk = request.POST['cell'])
+            if not _check_write_permission_obj(cell, request.user):
                 return rc.FORBIDDEN
 
     elif isinstance(self, RevisionHandler):
@@ -242,7 +244,12 @@ class RevisionHandler(BaseHandler):
                                         request.form.cleaned_data['patch'])
                             )
 
-        # rewing the file
+        # verify integrity
+        if revision.content.md5 != request.form.cleaned_data['md5']:
+            revision.content.delete()
+            return rc.BAD_REQUEST
+
+        # rewinding the file
         request.form.cleaned_data['patch'].file.seek(0)
         revision.patch.put(request.form.cleaned_data['patch'])
 
@@ -250,12 +257,18 @@ class RevisionHandler(BaseHandler):
         droplet.no_revisions += 1
         droplet.save()
 
+        return revision
+
     @check_write_permission
     @watchdog_notfound
     def delete(self, request, droplet_id, revision_id):
         droplet = Droplet.objects.get(pk=droplet_id)
+        revision_id = int(revision_id) - 1
+        if revision_id < 0:
+            return rc.BAD_REQUEST
+
         try:
-            droplet.revisions.pop(int(revision_id))
+            droplet.revisions.pop(revision_id)
         except IndexError:
             return rc.NOT_FOUND
 
@@ -273,16 +286,16 @@ class RevisionContentHandler(BaseHandler):
     def read(self, request, droplet_id, revision_id=None):
         droplet = Droplet.objects.get(pk=droplet_id)
         if not revision_id:
-            return droplet.revisions[-1].content.read()
-        else:
-            revision_id = int(revision_id) -1
-            if revision_id < 0:
-                return rc.BAD_REQUEST
+            revision_id = len(droplet.revisions)
 
-            try:
-                return droplet.revisions[revision_id].content.read()
-            except IndexError:
-                return rc.NOT_FOUND
+        revision_id = int(revision_id) -1
+        if revision_id < 0:
+            return rc.BAD_REQUEST
+
+        try:
+            return droplet.revisions[revision_id].content.read()
+        except IndexError:
+            return rc.NOT_FOUND
 
 class RevisionPatchHandler(BaseHandler):
     allowed_methods = ('GET',)
@@ -292,28 +305,43 @@ class RevisionPatchHandler(BaseHandler):
     def read(self, request, droplet_id, revision_id=None):
         droplet = Droplet.objects.get(pk=droplet_id)
         if not revision_id:
-            return droplet.revisions[-1].patch.read()
-        else:
-            revision_id = int(revision_id) -1
-            if revision_id < 1:
-                # this is < 1 because revision 1 does not have a
-                # patch!
-                return rc.BAD_REQUEST
+            revision_id = len(droplet.revisions)
 
-            try:
-                return droplet.revisions[revision_id].patch.read()
-            except IndexError:
-                return rc.NOT_FOUND
+        revision_id = int(revision_id) -1
+        if revision_id < 1:
+            # this is < 1 because revision 1 does not have a
+            # patch!
+            return rc.BAD_REQUEST
+
+        try:
+            return droplet.revisions[revision_id].patch.read()
+        except IndexError:
+            return rc.NOT_FOUND
 
 
 class DropletCreateForm(forms.Form):
     name = forms.CharField(max_length=500, min_length=1, required=True)
     cell = forms.CharField(max_length=500, required=True)
 
+class DropletUpdateForm(forms.Form):
+    name = forms.CharField(max_length=500, min_length=1, required=False)
+    cell = forms.CharField(max_length=500, required=False)
+
+    def clean(self):
+        super(DropletUpdateForm, self).clean()
+
+        if not self.cleaned_data['name'] and not self.cleaned_data['cell']:
+            raise ValidationError("At leat name or cell must be given")
+
+        if self.is_valid() and self.cleaned_data['cell']:
+            self.cleaned_data['cell'] = Cell.objects.get(pk=self.cleaned_data['cell'])
+
+        return self.cleaned_data
+
 class DropletHandler(BaseHandler):
-    allowed_methods = ('GET', 'POST', 'DELETE')
+    allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = Droplet
-    fields = ('id', 'owner', 'created', 'no_revisions', 'revisions')
+    fields = ('id', 'name', 'owner', 'cell', 'created', 'no_revisions', 'revisions')
 
     @add_server_timestamp
     @check_read_permission
@@ -334,10 +362,22 @@ class DropletHandler(BaseHandler):
         d.save()
         return d
 
+    @add_server_timestamp
+    @check_write_permission
+    @validate(DropletUpdateForm, ('POST',))
+    @watchdog_notfound
+    def update(self, request, droplet_id):
+        droplet = Droplet.objects.get(pk=droplet_id)
+        droplet.name = request.form.cleaned_data.get('name') or droplet.name
+        droplet.cell = request.form.cleaned_data.get('cell') or droplet.cell
+        droplet.save()
+
+        return droplet
+
     @check_write_permission
     @watchdog_notfound
     def delete(self, request, droplet_id):
-        Droplet.objects(pk=droplet_id).delete()
+        map(lambda x: x.delete(), Droplet.objects(pk=droplet_id))
         return rc.DELETED
 
 class CellShareUpdateForm(forms.Form):
