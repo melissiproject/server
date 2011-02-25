@@ -6,17 +6,17 @@ from django.views.generic.simple import redirect_to
 
 from melisi.api.handlers import CellHandler, CellShareHandler, \
      DropletHandler, RevisionHandler, RevisionContentHandler, \
-     RevisionPatchHandler, UserHandler
+     RevisionPatchHandler, UserHandler, StatusHandler
 
 basic_auth = HttpBasicAuthentication(realm='melisi')
 cell_handler = Resource(CellHandler, authentication=basic_auth)
 cell_share_handler = Resource(CellShareHandler, authentication=basic_auth)
 droplet_handler = Resource(DropletHandler, authentication=basic_auth)
-# droplet_history_handler = Resource(DropletHistoryHandler, authentication=basic_auth)
 revision_handler = Resource(RevisionHandler, authentication=basic_auth)
 revision_content_handler = Resource(RevisionContentHandler, authentication=basic_auth)
 revision_patch_handler = Resource(RevisionPatchHandler, authentication=basic_auth)
 user_handler = Resource(UserHandler, authentication=basic_auth)
+status_handler = Resource(StatusHandler, authentication=basic_auth)
 
 urlpatterns = patterns(
     '',
@@ -26,7 +26,6 @@ urlpatterns = patterns(
     (r'^cell/$', cell_handler),
 
     (r'^droplet/(?P<droplet_id>\w+)/$', droplet_handler),
-    # (r'^droplet/(?P<droplet_id>\d+)/history/$', droplet_history_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/$', revision_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/latest/$', revision_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/latest/content/$', revision_content_handler),
@@ -37,6 +36,6 @@ urlpatterns = patterns(
     (r'^droplet/$', droplet_handler),
 
     (r'^user/(?P<username>\w+)/$', user_handler),
-    # (r'^user/cells/$', user_cell_handler),
+    (r'^status/$', status_handler),
     (r'^user/$', user_handler),
     )
