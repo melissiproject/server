@@ -7,7 +7,6 @@ Replace these with more appropriate tests for your application.
 
 import base64
 import json
-
 from django.test import TestCase
 from django.test.client import Client
 
@@ -28,16 +27,31 @@ class AuthTestCase(TestCase):
     #     print "Hi _pre_setup"
     #     super(TestCase, self)._pre_setup()
 
+    # def __init__(self):
+    #     from pymongo.connection import Connection
+    #     self.connection = Connection()
+    #     self.db = connection['melisi-example']
+
+    #     super(AuthTestCase, self).__init__()
+
     def _dropdb(self):
-        from pymongo.connection import Connection
-        connection = Connection()
-        connection.drop_database("melisi-example")
+        self.connection.drop_database("melisi-example")
 
     def _fixture_setup(self):
-        self._dropdb()
+        self.teardown(full=True)
 
     def _fixture_teardown(self):
-        self._dropdb()
+        pass
+
+    def teardown(self, full=False):
+        map(lambda x: x.delete(), Cell.objects.all())
+
+        # from pymongo.connection import Connection
+        # self.connection = Connection()
+        # self.db = self.connection['melisi-example']
+
+        if full:
+            map(lambda x: x.delete(), User.objects.all())
 
     def auth(self, username, password):
         auth = '%s:%s' % (username, password)
@@ -90,20 +104,24 @@ def test_multiple_users(function, self, *args, **kwargs):
     # Test
     for user, data in dic['users'].iteritems():
         # print "Testing", user
+        s = {}
         if dic.get('setup'):
             s = dic['setup']() or {}
-        else:
-            s = {}
 
         method = getattr(self.client, dic['method'])
 
         postdata = {}
         for key, value in dic.get('postdata', {}).iteritems():
-            postdata[key] = value % s
+            if isinstance(dic['postdata'][key], basestring):
+                postdata[key] = value % s
+            else:
+                postdata[key] = value
 
         response = method(dic['url'] % s,
                           postdata,
                           **data['auth'])
+
+        # print response.content
 
         self.assertEqual(response.status_code, dic['response_code'][user])
 
@@ -230,10 +248,6 @@ class UserTest(AuthTestCase):
 
 class CellTest(AuthTestCase):
     def setUp(self):
-        self.username = 'testuser'
-        self.password = '123'
-        self.email = 'testuser@example.com'
-
         self.users = {
             'user' : self.create_user(),
             'admin' : self.create_superuser(),
@@ -243,11 +257,8 @@ class CellTest(AuthTestCase):
 
     @test_multiple_users
     def test_create_root_cell(self):
-        def teardown():
-            Cell.objects(name="test").delete()
-
         dic = {
-            'teardown': teardown,
+            'teardown': self.teardown,
             'response_code': {'user': 200,
                               'admin': 200,
                               'anonymous':401,
@@ -274,13 +285,9 @@ class CellTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def teardown():
-            Cell.objects(name="foo").delete()
-            Cell.objects(name="test").delete()
-
         dic = {
             'setup': setup,
-            'teardown': teardown,
+            'teardown': self.teardown,
             'response_code': {'user': 401,
                               'admin': 401,
                               'anonymous':401,
@@ -313,14 +320,9 @@ class CellTest(AuthTestCase):
 
             return { 'cell_id': c1.pk }
 
-        def teardown():
-            Cell.objects(name="foo").delete()
-            Cell.objects(name="test").delete()
-
-
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'response_code': {'user': 401,
                               'admin': 401,
                               'anonymous':401,
@@ -347,12 +349,9 @@ class CellTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def teardown():
-            Cell.objects(name="foo").delete()
-
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'get',
             'url':'/api/cell/%(cell_id)s/',
             'users': self.users,
@@ -374,12 +373,9 @@ class CellTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def teardown():
-            Cell.objects(name="foo").delete()
-
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'put',
             'url':'/api/cell/%(cell_id)s/',
             'users': self.users,
@@ -392,6 +388,33 @@ class CellTest(AuthTestCase):
                               }
             }
         return dic
+
+    @test_multiple_users
+    def test_denied_update_name_cell(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="foo", owner=u)
+            c.save()
+            c1 = Cell(name="bar", owner=u)
+            c1.save()
+
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup':setup,
+            'teardown':self.teardown,
+            'method':'put',
+            'url':'/api/cell/%(cell_id)s/',
+            'users': self.users,
+            'postdata': { 'name': 'bar' },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 400,
+                              }
+            }
+        return dic
+
 
     @test_multiple_users
     def test_move_cell(self):
@@ -411,12 +434,6 @@ class CellTest(AuthTestCase):
 
             return { 'c2': c2.pk, 'c3': c3.pk }
 
-        def teardown():
-            Cell.objects(name="child-bar").delete()
-            Cell.objects(name="bar").delete()
-            Cell.objects(name="new-root").delete()
-            Cell.objects(name="foo").delete()
-
         def extra_checks():
             # do more detailed tests
             c2 = Cell.objects.get(name="bar")
@@ -429,7 +446,7 @@ class CellTest(AuthTestCase):
 
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'put',
             'url':'/api/cell/%(c2)s/',
             'users': self.users,
@@ -464,15 +481,9 @@ class CellTest(AuthTestCase):
 
             return { 'c2': c2.pk, 'c3': c3.pk }
 
-        def teardown():
-            Cell.objects(name="child-bar").delete()
-            Cell.objects(name="bar").delete()
-            Cell.objects(name="new-root").delete()
-            Cell.objects(name="foo").delete()
-
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'put',
             'url':'/api/cell/%(c2)s/',
             'users': self.users,
@@ -505,17 +516,13 @@ class CellTest(AuthTestCase):
             d2.save()
             return { 'cell_id': c1 }
 
-        def teardown():
-            Droplet.drop_collection()
-            Cell.drop_collection()
-
         def extra_checks():
             self.assertEqual(Cell.objects.count(), 0)
             self.assertEqual(Droplet.objects.count(), 0)
 
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'delete',
             'url':'/api/cell/%(cell_id)s/',
             'users':self.users,
@@ -539,12 +546,9 @@ class CellTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def teardown():
-            Cell.objects(name="foo").delete()
-
         dic = {
             'setup':setup,
-            'teardown':teardown,
+            'teardown':self.teardown,
             'method':'delete',
             'url':'/api/cell/%(cell_id)s/',
             'users': self.users,
@@ -555,3 +559,804 @@ class CellTest(AuthTestCase):
                               }
             }
         return dic
+
+class DropletTest(AuthTestCase):
+    def setUp(self):
+        self.users = {
+            'user' : self.create_user(),
+            'admin' : self.create_superuser(),
+            'anonymous': self.create_anonymous(),
+            'owner': self.create_user("foo", "foo@example.com")
+            }
+
+    @test_multiple_users
+    def test_read_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="foo", owner=u)
+            c.save()
+            d = Droplet(name="drop", owner=u, cell=c)
+            d.save()
+
+            return { 'droplet_id': d.pk }
+
+        dic = {
+            'setup':setup,
+            'teardown':self.teardown,
+            'method':'get',
+            'url':'/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'content': '%(droplet_id)s',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+        return dic
+
+    @test_multiple_users
+    def test_create_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'post',
+            'url': '/api/droplet/',
+            'users': self.users,
+            'content': '%(cell_id)s',
+            'postdata': {'name':'drop',
+                         'cell':'%(cell_id)s'
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_create_duplicate_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            return { 'cell_id': c.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'post',
+            'url': '/api/droplet/',
+            'users': self.users,
+            'content': '%(cell_id)s',
+            'postdata': {'name':'drop',
+                         'cell':'%(cell_id)s'
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 400,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_update_name_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            return { 'droplet_id':d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'content': 'newname',
+            'postdata': {'name':'newname',
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_denied_update_name_droplet(self):
+        """ Duplicate name """
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            d2 = Droplet(name='newname', owner=u, cell=c)
+            d2.save()
+            return { 'droplet_id':d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'postdata': {'name':'newname',
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 400,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_delete_droplet(self):
+        """ Duplicate name """
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            return { 'droplet_id':d.pk }
+
+        def extra_checks():
+            self.assertEqual(Droplet.objects.count(), 0)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'delete',
+            'url': '/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'postdata': {'name':'newname',
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 204,
+                              },
+            'checks':{'owner': extra_checks},
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_move_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            c1 = Cell(name="foo", owner=u)
+            c1.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            return { 'droplet_id':d.pk, 'cell_id':c1.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'content': '%(cell_id)s',
+            'postdata': {'cell':'%(cell_id)s',
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_denied_move_droplet(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            u1 = User.objects.get(username="melisi")
+            c = Cell(name="bar", owner=u)
+            c.save()
+            c1 = Cell(name="foo", owner=u1)
+            c1.save()
+            d = Droplet(name='drop', owner=u, cell=c)
+            d.save()
+            return { 'droplet_id':d.pk, 'cell_id':c1.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/',
+            'users': self.users,
+            'content': '%(cell_id)s',
+            'postdata': {'cell':'%(cell_id)s',
+                         },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 401,
+                              }
+            }
+
+        return dic
+
+class RevisionTest(AuthTestCase):
+    def setUp(self):
+        self.users = {
+            'user' : self.create_user(),
+            'admin' : self.create_superuser(),
+            'anonymous': self.create_anonymous(),
+            'owner': self.create_user("foo", "foo@example.com")
+            }
+
+    @test_multiple_users
+    def test_read_latest_revision(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewing file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u)
+            r.content.put(content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/latest/',
+            'users': self.users,
+            'content': 'created',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_read_specific_revision(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewing file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u)
+            r.content.new_file()
+            r.content.write(content.read())
+            r.content.close()
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'users': self.users,
+            'content': 'created',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_create_revision(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            #rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'post',
+            'url': '/api/droplet/%(droplet_id)s/revision/',
+            'users': self.users,
+            'content': 'created',
+            'postdata': { 'number': '1',
+                          'md5': md5,
+                          'content': content,
+                          },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_denied_create_revision(self):
+        """ Invalid md5 / data combination """
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = 'foobar-fake-md5'
+        content.seek(0)
+
+        def setup():
+            #rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'post',
+            'url': '/api/droplet/%(droplet_id)s/revision/',
+            'users': self.users,
+            'postdata': { 'number': '1',
+                          'md5': md5,
+                          'content': content,
+                          },
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 400,
+                              }
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_delete_revision(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u)
+            r.content.put(content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        def extra_checks():
+            d = Droplet.objects.get(name="d1")
+            self.assertEqual(len(d.revisions), 0)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'delete',
+            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 204,
+                              },
+            'checks': {'owner': extra_checks }
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_read_latest_revision_content(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, content=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/latest/content/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'content': '1234567890'
+            }
+
+        return dic
+
+
+    # @test_multiple_users
+    def test_read_latest_revision_patch(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, patch=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/latest/patch/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'content': '1234567890'
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_read_specific_revision_content(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, content=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/1/content/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'content': '1234567890'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_read_specific_revision_patch(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('1234567890\n')
+        content.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, patch=content)
+            d.revisions.append(r)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'url': '/api/droplet/%(droplet_id)s/revision/2/patch/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'content': '1234567890'
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_update_revision(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('123456')
+        content.seek(0)
+        delta = tempfile.TemporaryFile()
+        delta.write('72730236410b303132333435363738390a00'.decode('HEX'))
+        delta.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+            delta.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, content=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'postdata': { 'number': '2',
+                          'md5': '3749f52bb326ae96782b42dc0a97b4c1', # md5 of '0123456789'
+                          'patch': delta,
+                          },
+            'content': 'created'
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_denied_update_revision(self):
+        """ Invalid md5 / data combination """
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('123456')
+        content.seek(0)
+        delta = tempfile.TemporaryFile()
+        delta.write('72730236410b303132333435363738390a00'.decode('HEX'))
+        delta.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+            delta.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, content=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 400,
+                              },
+            'postdata': { 'number': '2',
+                          'md5': 'foo-bar-wrong-md5',
+                          'patch': delta,
+                          },
+            'content': 'created'
+            }
+
+        return dic
+
