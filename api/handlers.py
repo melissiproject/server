@@ -675,7 +675,8 @@ class StatusHandler(BaseHandler):
         cells = []
         map(lambda x: cells.append(x), c)
         droplets = []
-        map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c))
+        map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c,
+                                                                 revisions__not__size = 0))
 
         return {'cells': cells, 'droplets': droplets }
 
