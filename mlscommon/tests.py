@@ -1098,7 +1098,6 @@ class RevisionTest(AuthTestCase):
                               'anonymous': 401,
                               'owner': 200,
                               },
-            'content': '1234567890'
             }
 
         return dic
@@ -1146,7 +1145,6 @@ class RevisionTest(AuthTestCase):
                               'anonymous': 401,
                               'owner': 200,
                               },
-            'content': '1234567890'
             }
 
         return dic
@@ -1194,7 +1192,6 @@ class RevisionTest(AuthTestCase):
                               'anonymous': 401,
                               'owner': 200,
                               },
-            'content': '1234567890'
             }
 
         return dic
@@ -1242,7 +1239,6 @@ class RevisionTest(AuthTestCase):
                               'anonymous': 401,
                               'owner': 200,
                               },
-            'content': '1234567890'
             }
 
         return dic
@@ -1641,7 +1637,7 @@ class ShareTest(AuthTestCase):
             c.shared_with.append(s)
             c.save()
 
-            return { 'cell_id': c.pk }
+            return { 'cell_id': c.pk, 'username': u1.username }
 
         def extra_checks():
             c = Cell.objects.get(name="c1")
@@ -1652,7 +1648,7 @@ class ShareTest(AuthTestCase):
             'teardown': self.teardown,
             'method': 'delete',
             'users': self.users,
-            'url': '/api/cell/%(cell_id)s/share/bar/',
+            'url': '/api/cell/%(cell_id)s/share/%(username)s/',
             'response_code': {'user': 401,
                               'admin': 401,
                               'anonymous': 401,
