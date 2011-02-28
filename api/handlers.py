@@ -407,9 +407,6 @@ class CellShareUpdateForm(CellShareForm):
     user = forms.CharField(max_length=500, required=True)
     mode = forms.CharField(required=True)
 
-class CellShareDeleteForm(CellShareForm):
-    user = forms.CharField(max_length=500, required=False)
-
 class CellShareHandler(BaseHandler):
     model = Share
     allowed_methods = ('GET', 'POST', 'DELETE')
@@ -452,14 +449,9 @@ class CellShareHandler(BaseHandler):
 
     @add_server_timestamp
     @check_write_permission
-    @validate(CellShareDeleteForm, ('POST',))
     @watchdog_notfound
     def delete(self, request, cell_id, username=None):
         """ Currently only owner can change stuff
-
-        TODO We read POST data probably due to a django bug.
-        So everytime we use this function we delete the whole shared_with set
-
         """
         cell = Cell.objects.get(pk=cell_id)
         root = Cell.objects.get(pk__in = cell.roots + [cell],
