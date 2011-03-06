@@ -1103,7 +1103,7 @@ class RevisionTest(AuthTestCase):
         return dic
 
 
-    # @test_multiple_users
+    @test_multiple_users
     def test_read_latest_revision_patch(self):
         import hashlib
         import tempfile
@@ -1130,6 +1130,8 @@ class RevisionTest(AuthTestCase):
             # create revision
             r = Revision(user=u, patch=content)
             d.revisions.append(r)
+            d.revisions.append(r)
+
             d.save()
 
             return { 'droplet_id' : d.pk }
@@ -1283,16 +1285,16 @@ class RevisionTest(AuthTestCase):
             'setup': setup,
             'teardown': self.teardown,
             'method': 'put',
-            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'url': '/api/droplet/%(droplet_id)s/revision/',
             'users': self.users,
             'response_code': {'user': 401,
                               'admin': 401,
                               'anonymous': 401,
                               'owner': 200,
                               },
-            'postdata': { 'number': '2',
+            'postdata': { 'number': '1',
                           'md5': '3749f52bb326ae96782b42dc0a97b4c1', # md5 of '0123456789'
-                          'patch': delta,
+                          'content': delta,
                           },
             'content': 'created'
             }
@@ -1340,7 +1342,7 @@ class RevisionTest(AuthTestCase):
             'setup': setup,
             'teardown': self.teardown,
             'method': 'put',
-            'url': '/api/droplet/%(droplet_id)s/revision/1/',
+            'url': '/api/droplet/%(droplet_id)s/revision/',
             'users': self.users,
             'response_code': {'user': 401,
                               'admin': 401,
