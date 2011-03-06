@@ -19,9 +19,10 @@ class Cell(Document):
     name = StringField(required=True)
     created = DateTimeField(required=True, default=datetime.now)
     updated = DateTimeField(required=True, default=datetime.now)
-    owner = ReferenceField(User)
+    owner = ReferenceField(User, required=True)
     shared_with = ListField(EmbeddedDocumentField(Share))
     roots = ListField(ReferenceField("Cell"))
+    deleted = BooleanField(default=False, required=True)
 
     # nah not pythonic
     meta = {
@@ -89,18 +90,28 @@ class Revision(EmbeddedDocument):
     content = FileField(required=True)
     patch = FileField(required=False)
 
-    # @property
-    # def url(self):
-    #     return "foo-bar"
+    @property
+    def content_md5(self):
+        try:
+            return self.content.md5
+        except AttributeError:
+            return None
+
+    @property
+    def patch_md5(self):
+        try:
+            return self.patch.md5
+        except AttributeError:
+            return None
 
 class Droplet(Document):
     name = StringField(required=True)
-    owner = ReferenceField(User)
+    owner = ReferenceField(User, required=True)
     created = DateTimeField(required=True, default=datetime.now)
     updated = DateTimeField(required=True, default=datetime.now)
-    cell = ReferenceField(Cell)
-    no_revisions = IntField(min_value=0, default=0)
+    cell = ReferenceField(Cell, required=True)
     revisions = ListField(EmbeddedDocumentField(Revision))
+    deleted = BooleanField(default=False, required=True)
 
     meta = {
         'indexes': ['revisions', 'cell']
