@@ -171,6 +171,7 @@ def check_write_permission(function, self, request, *args, **kwargs):
 
 
 class RevisionCreateForm(forms.Form):
+    number = forms.IntegerField(required=True, validators=[MinValueValidator(0)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     content = forms.FileField(required=True)
 
