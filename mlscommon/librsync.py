@@ -102,16 +102,17 @@ class LikeFile:
             new_in = self.infile.read(blocksize)
             if not new_in:
                 self.infile_eof = 1
-                assert not self.infile.close()
+                # assert not self.infile.close()
                 self.infile_closed = 1
                 break
             self.inbuf += new_in
 
     def close(self):
         """Close infile"""
-        if not self.infile_closed:
-            assert not self.infile.close()
-        self.closed = 1
+        return
+        # if not self.infile_closed:
+        #     assert not self.infile.close()
+        # self.closed = 1
 
 
 class SigFile(LikeFile):
@@ -139,6 +140,9 @@ class DeltaFile(LikeFile):
         close() methods.  It will be closed when self is closed.
 
         """
+        self._signature = signature
+        self._new_file = new_file
+
         LikeFile.__init__(self, new_file)
         if type(signature) is types.StringType:
             sig_string = signature
@@ -151,8 +155,11 @@ class DeltaFile(LikeFile):
         except _librsync.librsyncError, e:
             raise librsyncError(str(e))
 
+    def reset(self):
+        self._new_file.seek(0)
+        self.__init__(self._signature, self._new_file)
 
-class PatchFile(LikeFile):
+class PatchedFile(LikeFile):
     """File-like object which applies a librsync delta incrementally"""
     def __init__(self, basis_file, delta_file):
         """PatchedFile initializer - call with basis delta
