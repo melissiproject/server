@@ -35,7 +35,7 @@ def patch_file(source, delta):
     """ Source, delta, destination are django.core.files.File objects
     """
 
-    f = librsync.PatchFile(source, delta)
+    f = librsync.PatchedFile(source, delta)
     source.seek(0)
     delta.seek(0)
     return f
