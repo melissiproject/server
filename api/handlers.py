@@ -171,7 +171,6 @@ def check_write_permission(function, self, request, *args, **kwargs):
 
 
 class RevisionCreateForm(forms.Form):
-    number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     content = forms.FileField(required=True)
 
@@ -188,11 +187,11 @@ class RevisionCreateForm(forms.Form):
 class RevisionUpdateForm(forms.Form):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
-    patch = forms.FileField(required=True)
+    content = forms.FileField(required=True)
 
 class RevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('user', 'created')
+    fields = ('user', 'created', 'content_md5', 'patch_md5')
     model = Revision
 
     @add_server_timestamp
@@ -226,29 +225,38 @@ class RevisionHandler(BaseHandler):
         revision.content.seek(0)
 
         droplet = Droplet.objects.get(pk=droplet_id)
-        droplet.no_revisions += 1
         droplet.revisions.append(revision)
         droplet.save()
 
-        return revision
+        return {'revision': revision, 'number': len(droplet.revisions)}
 
 
     @add_server_timestamp
     @check_write_permission
     @validate(RevisionUpdateForm, ('POST', 'FILES'))
     @watchdog_notfound
-    def update(self, request, droplet_id, revision_id):
+    def update(self, request, droplet_id):
         droplet = Droplet.objects.get(pk=droplet_id)
-
         try:
-            previous_revision = droplet.revisions[int(revision_id)-1]
+            previous_revision = droplet.revisions[request.form.cleaned_data['number'] - 1]
         except IndexError:
             return rc.BAD_REQUEST
 
+        with open("/tmp/content", 'wb') as f:
+            f.write(previous_revision.content.read())
+
+        with open("/tmp/patch", 'wb') as f:
+            f.write(request.form.cleaned_data['content'].read())
+
+        f1 = open('/tmp/content')
+
         revision = Revision()
         revision.user = request.user
+        # revision.content.put(patch_file(previous_revision.content,
+        #                                 request.form.cleaned_data['content'])
+        #                     )
         revision.content.put(patch_file(previous_revision.content,
-                                        request.form.cleaned_data['patch'])
+                                        request.form.cleaned_data['content'])
                             )
 
         # verify integrity
@@ -257,11 +265,10 @@ class RevisionHandler(BaseHandler):
             return rc.BAD_REQUEST
 
         # rewinding the file
-        request.form.cleaned_data['patch'].file.seek(0)
-        revision.patch.put(request.form.cleaned_data['patch'])
+        request.form.cleaned_data['content'].file.seek(0)
+        revision.patch.put(request.form.cleaned_data['content'])
 
         droplet.revisions.append(revision)
-        droplet.no_revisions += 1
         droplet.save()
 
         return revision
@@ -279,7 +286,6 @@ class RevisionHandler(BaseHandler):
         except IndexError:
             return rc.NOT_FOUND
 
-        droplet.no_revisions -= 1
         droplet.save()
 
         return rc.DELETED
@@ -346,7 +352,7 @@ class DropletUpdateForm(forms.Form):
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = Droplet
-    fields = ('id', 'name', 'owner', 'cell', 'created', 'no_revisions', 'revisions')
+    fields = ('pk', 'name', 'owner', 'cell', 'created', 'updated', 'revisions', 'deleted')
 
     @add_server_timestamp
     @check_read_permission
@@ -488,7 +494,7 @@ class CellUpdateForm(forms.Form):
 class CellHandler(BaseHandler):
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('pk','name', 'roots')
+    fields = ('pk','name', 'roots', 'owner', 'created', 'updated', 'deleted')
     depth = 2
 
     @add_server_timestamp
@@ -663,6 +669,9 @@ class UserHandler(BaseHandler):
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
 
+    depth = 2
+
+    @add_server_timestamp
     def read(self, request):
         s = Share(user=request.user, mode='wara')
         s1 = Share(user=request.user, mode='wnra')
