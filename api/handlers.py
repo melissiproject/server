@@ -389,7 +389,9 @@ class DropletHandler(BaseHandler):
     @check_write_permission
     @watchdog_notfound
     def delete(self, request, droplet_id):
-        map(lambda x: x.delete(), Droplet.objects(pk=droplet_id))
+        droplet = Droplet.objects.get(pk=droplet_id)
+        droplet.set_deleted()
+
         return rc.DELETED
 
 class CellShareForm(forms.Form):
@@ -551,7 +553,7 @@ class CellHandler(BaseHandler):
     @watchdog_notfound
     def delete(self, request, cell_id):
         cell = Cell.objects.get(pk = cell_id)
-        cell.delete()
+        cell.set_deleted()
 
         return rc.DELETED
 
@@ -689,6 +691,4 @@ class StatusHandler(BaseHandler):
                                                                  revisions__not__size = 0))
 
         return {'cells': cells, 'droplets': droplets }
-
-
 

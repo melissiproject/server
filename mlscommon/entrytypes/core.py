@@ -77,6 +77,13 @@ class Cell(Document):
                                                      ).count():
                 raise MongoValidationError("Name is not unique")
 
+    def set_deleted(self):
+        # set deleted all related droplets
+        cells = Cell.objects.filter(Q(roots__contains = self.pk) |\
+                                Q(pk=self.pk))
+        Droplet.objects(cell__in=cells).update(set__deleted=True)
+        cells.update(set__deleted=True)
+
     def delete(self):
         # delete all related droplets
         map(lambda x: x.delete(), Droplet.objects.filter(cell=self))
@@ -127,6 +134,13 @@ class Droplet(Document):
                                                     cell = self.cell,
                                                     ).count():
             raise MongoValidationError()
+
+    def set_deleted(self):
+        # set deleted all related droplets
+        if self.pk:
+            Droplet.objects(pk=self.pk).update(set__deleted=True)
+        else:
+            self.deleted = True
 
     def delete(self):
         """

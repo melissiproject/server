@@ -517,8 +517,8 @@ class CellTest(AuthTestCase):
             return { 'cell_id': c1 }
 
         def extra_checks():
-            self.assertEqual(Cell.objects.count(), 0)
-            self.assertEqual(Droplet.objects.count(), 0)
+            self.assertEqual(Cell.objects(deleted=True).count(), 3)
+            self.assertEqual(Droplet.objects(deleted=True).count(), 2)
 
         dic = {
             'setup':setup,
@@ -722,7 +722,7 @@ class DropletTest(AuthTestCase):
             return { 'droplet_id':d.pk }
 
         def extra_checks():
-            self.assertEqual(Droplet.objects.count(), 0)
+            self.assertEqual(Droplet.objects(deleted=True).count(), 1)
 
         dic = {
             'setup': setup,
