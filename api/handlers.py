@@ -379,6 +379,7 @@ class DropletHandler(BaseHandler):
     @validate(DropletUpdateForm, ('POST',))
     @watchdog_notfound
     def update(self, request, droplet_id):
+
         droplet = Droplet.objects.get(pk=droplet_id)
         droplet.name = request.form.cleaned_data.get('name') or droplet.name
         droplet.cell = request.form.cleaned_data.get('cell') or droplet.cell
@@ -506,7 +507,7 @@ class CellHandler(BaseHandler):
     def read(self, request, cell_id):
         cell = Cell.objects.get(pk=cell_id)
 
-        return {'cell': cell}
+        return cell
 
     @add_server_timestamp
     @check_write_permission
@@ -543,7 +544,7 @@ class CellHandler(BaseHandler):
             parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
             q = Cell.objects.filter(Q(roots__contains = cell) | Q(pk = cell.pk))
             q.update(pull_all__roots = cell.roots)
-            q.update(push_all__roots = parent.roots + [parent])
+            q.update(push_all__roots = [parent] + parent.roots)
 
         cell.reload()
         return cell
