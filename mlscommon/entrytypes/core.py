@@ -53,12 +53,14 @@ class Cell(Document):
             if self.pk and Cell.objects.filter(name = self.name,
                                                roots__size = len(self.roots),
                                                roots__in = self.roots,
-                                               pk__ne = self.pk
+                                               pk__ne = self.pk,
+                                               deleted = False,
                                                ).count():
                 raise MongoValidationError("Name is not unique")
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      roots__size = len(self.roots),
                                                      roots__in = self.roots,
+                                                     deleted = False,
                                                      ).count():
                 raise MongoValidationError("Name is not unique")
 
@@ -68,14 +70,21 @@ class Cell(Document):
             if self.pk and Cell.objects.filter(name = self.name,
                                                owner = self.owner,
                                                roots__size = 0,
-                                               pk__ne = self.pk
+                                               pk__ne = self.pk,
+                                               deleted = False,
                                                ).count():
                 raise MongoValidationError("Name is not unique")
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      owner = self.owner,
                                                      roots__size = 0,
+                                                     deleted = False,
                                                      ).count():
                 raise MongoValidationError("Name is not unique")
+
+    def save(self):
+        # TODO until we fix mongoengine to support auto_now_add and auto_now
+        self.updated = datetime.now()
+        super(Cell, self).save()
 
     def set_deleted(self):
         # set deleted all related droplets
@@ -83,6 +92,9 @@ class Cell(Document):
                                 Q(pk=self.pk))
         Droplet.objects(cell__in=cells).update(set__deleted=True)
         cells.update(set__deleted=True)
+
+        # save self to update updated timestamp
+        self.save()
 
     def delete(self):
         # delete all related droplets
@@ -127,13 +139,15 @@ class Droplet(Document):
     def validate(self):
         if self.pk and Droplet.objects.filter(name = self.name,
                                               cell = self.cell,
+                                              deleted = False,
                                               pk__ne = self.pk
                                               ).count():
-            raise MongoValidationError()
+            raise MongoValidationError("Name not unique")
         elif not self.pk and Droplet.objects.filter(name = self.name,
                                                     cell = self.cell,
+                                                    deleted = False,
                                                     ).count():
-            raise MongoValidationError()
+            raise MongoValidationError("Name not unique")
 
     def set_deleted(self):
         # set deleted all related droplets
@@ -141,6 +155,14 @@ class Droplet(Document):
             Droplet.objects(pk=self.pk).update(set__deleted=True)
         else:
             self.deleted = True
+
+        # save self to update updated timestamp
+        self.save()
+
+    def save(self):
+        # TODO until we fix mongoengine to support auto_now_add and auto_now
+        self.updated = datetime.now()
+        super(Droplet, self).save()
 
     def delete(self):
         """
