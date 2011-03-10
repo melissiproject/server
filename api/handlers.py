@@ -243,19 +243,8 @@ class RevisionHandler(BaseHandler):
         except IndexError:
             return rc.BAD_REQUEST
 
-        with open("/tmp/content", 'wb') as f:
-            f.write(previous_revision.content.read())
-
-        with open("/tmp/patch", 'wb') as f:
-            f.write(request.form.cleaned_data['content'].read())
-
-        f1 = open('/tmp/content')
-
         revision = Revision()
         revision.user = request.user
-        # revision.content.put(patch_file(previous_revision.content,
-        #                                 request.form.cleaned_data['content'])
-        #                     )
         revision.content.put(patch_file(previous_revision.content,
                                         request.form.cleaned_data['content'])
                             )
@@ -272,7 +261,7 @@ class RevisionHandler(BaseHandler):
         droplet.revisions.append(revision)
         droplet.save()
 
-        return revision
+        return {'revision': revision, 'number': len(droplet.revisions)}
 
     @check_write_permission
     @watchdog_notfound
