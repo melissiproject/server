@@ -151,10 +151,7 @@ class Droplet(Document):
 
     def set_deleted(self):
         # set deleted all related droplets
-        if self.pk:
-            Droplet.objects(pk=self.pk).update(set__deleted=True)
-        else:
-            self.deleted = True
+        self.deleted = True
 
         # save self to update updated timestamp
         self.save()
