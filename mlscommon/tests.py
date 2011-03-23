@@ -517,7 +517,7 @@ class CellTest(AuthTestCase):
             return { 'cell_id': c1 }
 
         def extra_checks():
-            self.assertEqual(Cell.objects(deleted=True).count(), 2)
+            self.assertEqual(Cell.objects(deleted=True).count(), 3)
             self.assertEqual(Droplet.objects(deleted=True).count(), 2)
 
         dic = {

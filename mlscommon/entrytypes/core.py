@@ -93,6 +93,9 @@ class Cell(Document):
         Droplet.objects(cell__in=cells).update(set__deleted=True)
         cells.update(set__deleted=True)
 
+        # reload cell to update values
+        self.reload()
+
         # save self to update updated timestamp
         self.save()
 
