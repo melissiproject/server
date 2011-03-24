@@ -18,7 +18,7 @@ import re
 from piston.decorator import decorator
 
 from mlscommon.entrytypes import Droplet, Cell, Revision, Share
-from mlscommon.common import calculate_md5, patch_file, sendfile
+from mlscommon.common import calculate_md5, patch_file, sendfile, myFileField
 
 import settings
 
@@ -173,7 +173,11 @@ def check_write_permission(function, self, request, *args, **kwargs):
 class RevisionCreateForm(forms.Form):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(0)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
-    content = forms.FileField(required=True)
+    # caution we use our home breweded FileField form item
+    # to allow empty files. this is only for CreateForm
+    # to be changed when this code gets merged into django main
+    # http://code.djangoproject.com/ticket/13584
+    content = myFileField(required=True, allow_empty_file=True)
 
     def clean(self):
         super(RevisionCreateForm, self).clean()
