@@ -36,6 +36,8 @@ urlpatterns = patterns(
     (r'^droplet/$', droplet_handler),
 
     (r'^user/(?P<username>\w+)/$', user_handler),
+    (r'^status/all/$', status_handler, {'timestamp': 0}),
+    (r'^status/after/(?P<timestamp>\d+\.?\d+)/$', status_handler),
     (r'^status/$', status_handler),
     (r'^user/$', user_handler),
     )

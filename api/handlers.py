@@ -13,6 +13,7 @@ from django.core.validators import MinValueValidator
 from django.core.validators import MinValueValidator
 
 import time
+from datetime import datetime, timedelta
 import re
 
 from piston.decorator import decorator
@@ -669,12 +670,24 @@ class StatusHandler(BaseHandler):
     depth = 2
 
     @add_server_timestamp
-    def read(self, request):
+    def read(self, request, timestamp=None):
+        print timestamp
+        # note that the default timestamp is 24 hours
+        if not timestamp:
+            timestamp = datetime.now() - timedelta(days=1)
+        else:
+            # parse timestamp
+            try:
+                timestamp = datetime.fromtimestamp(float(timestamp))
+            except (ValueError, TypeError), error_message:
+                return rc.BAD_REQUEST
+
         s = Share(user=request.user, mode='wara')
         s1 = Share(user=request.user, mode='wnra')
-        cells = Cell.objects.filter( Q(owner=request.user) |
-                                     Q(shared_with__contains = s1) |
-                                     Q(shared_with__contains = s)
+        cells = Cell.objects.filter( (Q(owner=request.user) |
+                                      Q(shared_with__contains = s1) |
+                                      Q(shared_with__contains = s)) & \
+                                     Q(updated__gte = timestamp)
                                      )
         c = Cell.objects.filter( Q(pk__in = cells) | Q(roots__in = cells) )
 
@@ -682,7 +695,8 @@ class StatusHandler(BaseHandler):
         map(lambda x: cells.append(x), c)
         droplets = []
         map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c,
-                                                                 revisions__not__size = 0))
+                                                                 revisions__not__size = 0,
+                                                                 updated__gte = timestamp))
 
         return {'cells': cells, 'droplets': droplets }
 
