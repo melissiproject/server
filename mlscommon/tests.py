@@ -129,7 +129,7 @@ def test_multiple_users(function, self, *args, **kwargs):
             self.assertContains(response, dic['content'] % s)
 
         if dic.get('checks') and dic['checks'].get(user):
-            dic['checks'][user]()
+            dic['checks'][user](response)
 
         if dic.get('teardown'):
             dic['teardown']()
@@ -434,7 +434,7 @@ class CellTest(AuthTestCase):
 
             return { 'c2': c2.pk, 'c3': c3.pk }
 
-        def extra_checks():
+        def extra_checks(response):
             # do more detailed tests
             c2 = Cell.objects.get(name="bar")
             c4 = Cell.objects.get(name="child-bar")
@@ -516,7 +516,7 @@ class CellTest(AuthTestCase):
             d2.save()
             return { 'cell_id': c1 }
 
-        def extra_checks():
+        def extra_checks(response):
             self.assertEqual(Cell.objects(deleted=True).count(), 3)
             self.assertEqual(Droplet.objects(deleted=True).count(), 2)
 
@@ -721,7 +721,7 @@ class DropletTest(AuthTestCase):
             d.save()
             return { 'droplet_id':d.pk }
 
-        def extra_checks():
+        def extra_checks(response):
             self.assertEqual(Droplet.objects(deleted=True).count(), 1)
 
         dic = {
@@ -1036,7 +1036,7 @@ class RevisionTest(AuthTestCase):
 
             return { 'droplet_id' : d.pk }
 
-        def extra_checks():
+        def extra_checks(response):
             d = Droplet.objects.get(name="d1")
             self.assertEqual(len(d.revisions), 0)
 
@@ -1607,7 +1607,7 @@ class ShareTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def extra_checks():
+        def extra_checks(response):
             # c = Cell.objects.get(name="c1")
             # self.assertEqual(len(c.shared_with), 0)
             pass
@@ -1641,7 +1641,7 @@ class ShareTest(AuthTestCase):
 
             return { 'cell_id': c.pk, 'username': u1.username }
 
-        def extra_checks():
+        def extra_checks(response):
             c = Cell.objects.get(name="c1")
             self.assertEqual(len(c.shared_with), 0)
 
@@ -1685,7 +1685,7 @@ class ShareTest(AuthTestCase):
             User.objects(username="sharetest").delete()
             self.teardown()
 
-        def extra_checks():
+        def extra_checks(response):
             c = Cell.objects.get(name="c1")
             self.assertEqual(len(c.shared_with), 1)
 
@@ -1719,7 +1719,7 @@ class ShareTest(AuthTestCase):
 
             return { 'cell_id': c.pk }
 
-        def extra_checks():
+        def extra_checks(response):
             c = Cell.objects.get(name="c1")
             self.assertEqual(len(c.shared_with), 1)
             self.assertEqual(c.shared_with[0].mode, 'wnra')
@@ -1740,6 +1740,239 @@ class ShareTest(AuthTestCase):
                               'partner': 401,
                               },
             'checks': { 'owner' : extra_checks },
+            }
+
+        return dic
+
+class StatusTest(AuthTestCase):
+    def setUp(self):
+        self.users = {
+            'anonymous': self.create_anonymous(),
+            'owner': self.create_user("foo", "foo@example.com"),
+            }
+
+    @test_multiple_users
+    def test_share_cell_all(self):
+        """ get all updates """
+        def setup():
+            from datetime import datetime, timedelta
+            # timestamp
+            now = datetime.now()
+            a_month_ago = datetime.now() - timedelta(days=30)
+            a_day_ago = datetime.now() - timedelta(days=1)
+
+            u = User.objects.get(username="foo")
+            c = Cell(name="c1", owner=u)
+            c.save()
+            # force updated timestamp
+            Cell.objects(pk=c.pk).update(set__updated=now)
+
+            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1.save()
+            # force updated timestamp
+            Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
+
+            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2.save()
+            # force updated timestamp
+            Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
+
+
+            d = Droplet(name="d1", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d.revisions.append(r)
+            d.save()
+            # force updated timestamp
+            Droplet.objects(pk=d.pk).update(set__updated=now)
+
+
+            d1 = Droplet(name="d2", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d1.revisions.append(r)
+            d1.save()
+            # force updated timestamp
+            Droplet.objects(pk=d1.pk).update(set__updated=a_month_ago)
+
+            d2 = Droplet(name="d3", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d2.revisions.append(r)
+            d2.save()
+            # force updated timestamp
+            Droplet.objects(pk=d2.pk).update(set__updated=a_day_ago)
+
+        def extra_checks(response):
+            result = json.loads(response.content)
+            self.assertEqual(len(result['reply']['cells']), 3)
+            self.assertEqual(len(result['reply']['droplets']), 3)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/status/all/',
+            'response_code': {'anonymous': 401,
+                              'owner': 200
+                              },
+            'checks': {'owner': extra_checks },
+            }
+
+        return dic
+
+
+    @test_multiple_users
+    def test_share_cell(self):
+        """ no arguments, get last 24 hours """
+        def setup():
+            from datetime import datetime, timedelta
+            # timestamp
+            now = datetime.now()
+            a_month_ago = datetime.now() - timedelta(days=30)
+            a_day_ago = datetime.now() - timedelta(hours=23)
+
+            u = User.objects.get(username="foo")
+            c = Cell(name="c1", owner=u)
+            c.save()
+            # force updated timestamp
+            Cell.objects(pk=c.pk).update(set__updated=now)
+
+            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1.save()
+            # force updated timestamp
+            Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
+
+            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2.save()
+            # force updated timestamp
+            Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
+
+
+            d = Droplet(name="d1", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d.revisions.append(r)
+            d.save()
+            # force updated timestamp
+            Droplet.objects(pk=d.pk).update(set__updated=now)
+
+
+            d1 = Droplet(name="d2", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d1.revisions.append(r)
+            d1.save()
+            # force updated timestamp
+            Droplet.objects(pk=d1.pk).update(set__updated=a_month_ago)
+
+            d2 = Droplet(name="d3", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d2.revisions.append(r)
+            d2.save()
+            # force updated timestamp
+            Droplet.objects(pk=d2.pk).update(set__updated=a_day_ago)
+
+        def extra_checks(response):
+            result = json.loads(response.content)
+            self.assertEqual(len(result['reply']['cells']), 2)
+            self.assertEqual(len(result['reply']['droplets']), 2)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/status/',
+            'response_code': {'anonymous': 401,
+                              'owner': 200
+                              },
+            'checks': {'owner': extra_checks },
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_share_cell_after(self):
+        """ after a specific date """
+        def setup():
+            from datetime import datetime, timedelta
+            import time
+            # timestamp
+            now = datetime.now()
+            a_month_ago = datetime.now() - timedelta(days=30)
+            a_day_ago = datetime.now() - timedelta(hours=23)
+
+            u = User.objects.get(username="foo")
+            c = Cell(name="c1", owner=u)
+            c.save()
+            # force updated timestamp
+            Cell.objects(pk=c.pk).update(set__updated=now)
+
+            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1.save()
+            # force updated timestamp
+            Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
+
+            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2.save()
+            # force updated timestamp
+            Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
+
+
+            d = Droplet(name="d1", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d.revisions.append(r)
+            d.save()
+            # force updated timestamp
+            Droplet.objects(pk=d.pk).update(set__updated=now)
+
+
+            d1 = Droplet(name="d2", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d1.revisions.append(r)
+            d1.save()
+            # force updated timestamp
+            Droplet.objects(pk=d1.pk).update(set__updated=a_month_ago)
+
+            d2 = Droplet(name="d3", owner=u, cell=c)
+            # create revision
+            r = Revision(user=u)
+            r.content.put("")
+            d2.revisions.append(r)
+            d2.save()
+            # force updated timestamp
+            Droplet.objects(pk=d2.pk).update(set__updated=a_day_ago)
+
+            return {'timestamp': time.time() - 3600*2 }
+
+        def extra_checks(response):
+            result = json.loads(response.content)
+            self.assertEqual(len(result['reply']['cells']), 1)
+            self.assertEqual(len(result['reply']['droplets']), 1)
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'get',
+            'users': self.users,
+            'url': '/api/status/after/%(timestamp)s/',
+            'response_code': {'anonymous': 401,
+                              'owner': 200
+                              },
+            'checks': {'owner': extra_checks },
             }
 
         return dic

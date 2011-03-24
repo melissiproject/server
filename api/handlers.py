@@ -666,14 +666,12 @@ class UserHandler(BaseHandler):
 
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
-
     depth = 2
 
     @add_server_timestamp
     def read(self, request, timestamp=None):
-        print timestamp
         # note that the default timestamp is 24 hours
-        if not timestamp:
+        if timestamp == None:
             timestamp = datetime.now() - timedelta(days=1)
         else:
             # parse timestamp
@@ -684,19 +682,23 @@ class StatusHandler(BaseHandler):
 
         s = Share(user=request.user, mode='wara')
         s1 = Share(user=request.user, mode='wnra')
-        cells = Cell.objects.filter( (Q(owner=request.user) |
-                                      Q(shared_with__contains = s1) |
-                                      Q(shared_with__contains = s)) & \
-                                     Q(updated__gte = timestamp)
+        cells = Cell.objects.filter(Q(owner=request.user) |
+                                    Q(shared_with__contains = s1) |
+                                    Q(shared_with__contains = s)
                                      )
         c = Cell.objects.filter( Q(pk__in = cells) | Q(roots__in = cells) )
-
-        cells = []
-        map(lambda x: cells.append(x), c)
         droplets = []
         map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c,
                                                                  revisions__not__size = 0,
-                                                                 updated__gte = timestamp))
+                                                                 updated__gte = timestamp,
+                                                                 ))
+
+        # filter cells based on timestamp
+        c = Cell.objects.filter(pk__in = c,
+                                updated__gte = timestamp)
+        cells = []
+        map(lambda x: cells.append(x), c)
+
 
         return {'cells': cells, 'droplets': droplets }
 
