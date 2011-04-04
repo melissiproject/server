@@ -56,13 +56,13 @@ class Cell(Document):
                                                pk__ne = self.pk,
                                                deleted = False,
                                                ).count():
-                raise MongoValidationError("Name is not unique")
+                raise MongoValidationError("Name is not unique: %s" % self.name)
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      roots__size = len(self.roots),
                                                      roots__in = self.roots,
                                                      deleted = False,
                                                      ).count():
-                raise MongoValidationError("Name is not unique")
+                raise MongoValidationError("Name is not unique: %s" % self.name)
 
 
         # or if roots = [] ensure that name and owner are unique
@@ -73,13 +73,13 @@ class Cell(Document):
                                                pk__ne = self.pk,
                                                deleted = False,
                                                ).count():
-                raise MongoValidationError("Name is not unique")
+                raise MongoValidationError("Name is not unique %s" % self.name)
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      owner = self.owner,
                                                      roots__size = 0,
                                                      deleted = False,
                                                      ).count():
-                raise MongoValidationError("Name is not unique")
+                raise MongoValidationError("Name is not unique %s" % self.name)
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
@@ -145,12 +145,12 @@ class Droplet(Document):
                                               deleted = False,
                                               pk__ne = self.pk
                                               ).count():
-            raise MongoValidationError("Name not unique")
+            raise MongoValidationError("Name not unique %s" % self.name)
         elif not self.pk and Droplet.objects.filter(name = self.name,
                                                     cell = self.cell,
                                                     deleted = False,
                                                     ).count():
-            raise MongoValidationError("Name not unique")
+            raise MongoValidationError("Name not unique %s" % self.name)
 
     def set_deleted(self):
         # set deleted all related droplets
