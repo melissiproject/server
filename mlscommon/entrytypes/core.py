@@ -52,18 +52,20 @@ class Cell(Document):
         if len(self.roots):
             if self.pk and Cell.objects.filter(name = self.name,
                                                roots__size = len(self.roots),
-                                               roots__in = self.roots,
+                                               roots__all = self.roots,
                                                pk__ne = self.pk,
                                                deleted = False,
                                                ).count():
-                raise MongoValidationError("Name is not unique: %s" % self.name)
+                raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
+
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      roots__size = len(self.roots),
-                                                     roots__in = self.roots,
+                                                     roots__all = self.roots,
                                                      deleted = False,
                                                      ).count():
-                raise MongoValidationError("Name is not unique: %s" % self.name)
-
+                raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
 
         # or if roots = [] ensure that name and owner are unique
         else:
@@ -73,13 +75,17 @@ class Cell(Document):
                                                pk__ne = self.pk,
                                                deleted = False,
                                                ).count():
-                raise MongoValidationError("Name is not unique %s" % self.name)
+                raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
+
             elif not self.pk and Cell.objects.filter(name = self.name,
                                                      owner = self.owner,
                                                      roots__size = 0,
                                                      deleted = False,
                                                      ).count():
-                raise MongoValidationError("Name is not unique %s" % self.name)
+                raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
+
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
@@ -145,12 +151,14 @@ class Droplet(Document):
                                               deleted = False,
                                               pk__ne = self.pk
                                               ).count():
-            raise MongoValidationError("Name not unique %s" % self.name)
+            raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                       (self.name, self.cell))
         elif not self.pk and Droplet.objects.filter(name = self.name,
                                                     cell = self.cell,
                                                     deleted = False,
                                                     ).count():
-            raise MongoValidationError("Name not unique %s" % self.name)
+            raise MongoValidationError("Name not unique %s, cell: %s" %\
+                                       (self.name, self.cell))
 
     def set_deleted(self):
         # set deleted all related droplets
