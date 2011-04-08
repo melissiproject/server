@@ -11,6 +11,9 @@ from mongoengine.base import ValidationError as MongoValidationError
 class Share(EmbeddedDocument):
     user = ReferenceField(User)
     mode = StringField(required=True)
+    name = StringField(required=True)
+    roots = ListField(ReferenceField("Cell"))
+    created = DateTimeField(required=True, default=datetime.now)
 
     def __unicode__(self):
         return "%s - %s" % (self.user, self.mode)
