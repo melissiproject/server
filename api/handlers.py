@@ -194,6 +194,9 @@ class RevisionUpdateForm(forms.Form):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     content = forms.FileField(required=True)
+    patch = forms.ChoiceField(choices=((True, 'True'), (False, 'False')),
+                              required=True,
+                              )
 
 class RevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
@@ -230,6 +233,11 @@ class RevisionHandler(BaseHandler):
         revision.content.put(request.form.cleaned_data['content'].file)
         revision.content.seek(0)
 
+        # verify integrity
+        if revision.content.md5 != request.form.cleaned_data['md5']:
+            revision.content.delete()
+            return rc.BAD_REQUEST
+
         droplet = Droplet.objects.get(pk=droplet_id)
         droplet.revisions.append(revision)
         droplet.save()
@@ -250,18 +258,21 @@ class RevisionHandler(BaseHandler):
 
         revision = Revision()
         revision.user = request.user
-        revision.content.put(patch_file(previous_revision.content,
-                                        request.form.cleaned_data['content'])
-                            )
+        if request.form.cleaned_data['patch'] == True:
+            revision.content.put(patch_file(previous_revision.content,
+                                            request.form.cleaned_data['content'])
+                                )
+
+            # rewinding the file
+            request.form.cleaned_data['content'].file.seek(0)
+            revision.patch.put(request.form.cleaned_data['content'])
+        else:
+            revision.content.put(request.form.cleaned_data['content'])
 
         # verify integrity
         if revision.content.md5 != request.form.cleaned_data['md5']:
             revision.content.delete()
             return rc.BAD_REQUEST
-
-        # rewinding the file
-        request.form.cleaned_data['content'].file.seek(0)
-        revision.patch.put(request.form.cleaned_data['content'])
 
         droplet.revisions.append(revision)
         droplet.save()
