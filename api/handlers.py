@@ -258,7 +258,8 @@ class RevisionHandler(BaseHandler):
 
         revision = Revision()
         revision.user = request.user
-        if request.form.cleaned_data['patch'] == True:
+
+        if request.form.cleaned_data['patch'] == 'True':
             revision.content.put(patch_file(previous_revision.content,
                                             request.form.cleaned_data['content'])
                                 )
