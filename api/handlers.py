@@ -447,7 +447,6 @@ class CellShareHandler(BaseHandler):
     def create(self, request, cell_id):
         """ If user not in shared_with add him. If user in shared_with update entry """
         user = request.form.cleaned_data['user']
-        share = Share(user=user, mode=request.form.cleaned_data['mode'])
 
         # check that a root is not shared
         cell = Cell.objects.get(pk=cell_id)
@@ -455,12 +454,17 @@ class CellShareHandler(BaseHandler):
                                shared_with__not__size = 0).count():
             return rc.BAD_REQUEST
 
-        # remove previous entry, if any
-        # (creating a Share object without mode results into all
-        # shares of that user to be matched. mode is ignored)
-        Cell.objects(pk=cell_id).update(pull__shared_with=Share(user=user))
-        Cell.objects(pk=cell_id).update(push__shared_with=share)
-
+        for share in cell.shared_with:
+            if share.user == user:
+                share.mode = request.form.cleaned_data['mode']
+                break
+        else:
+            # we didn't find the user, create one share now
+            cell.shared_with.append(Share(user=user,
+                                          mode=request.form.cleaned_data['mode'],
+                                          )
+                                    )
+        cell.save()
         return rc.CREATED
 
     @add_server_timestamp

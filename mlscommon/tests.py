@@ -103,7 +103,7 @@ def test_multiple_users(function, self, *args, **kwargs):
     dic = function(self, *args, **kwargs)
     # Test
     for user, data in dic['users'].iteritems():
-        print "Testing", user
+        # print "Testing", user
         s = {}
         if dic.get('setup'):
             s = dic['setup']() or {}
@@ -121,7 +121,7 @@ def test_multiple_users(function, self, *args, **kwargs):
                           postdata,
                           **data['auth'])
 
-        print response.content
+        # print response.content
 
         self.assertEqual(response.status_code, dic['response_code'][user])
 
