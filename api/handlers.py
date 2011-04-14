@@ -480,8 +480,12 @@ class CellShareHandler(BaseHandler):
                 # from share
                 return rc.FORBIDDEN
 
-            if Cell.objects(pk=root.pk).update(pull__shared_with = \
-                                               Share(user=user)) != 1:
+            for share in cell.shared_with:
+                if share.user == user:
+                    cell.shared_with.remove(share)
+                    cell.save()
+                    break
+            else:
                 return rc.NOT_FOUND
 
         else:
