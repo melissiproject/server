@@ -551,14 +551,33 @@ class CellHandler(BaseHandler):
     @watchdog_notfound
     def update(self, request, cell_id):
         cell = Cell.objects.get(pk=cell_id)
-        cell.name = request.form.cleaned_data.get('name') or cell.name
-        cell.save()
 
-        if len(request.form.cleaned_data.get('parent', '')):
+        # if cell is root of shared and user is not owned then, change
+        # values in shared_with
+        if len(cell.shared_with) != 0 and cell.owner != request.user:
+            q = Cell.objects.get(pk = cell.pk, shared_with__user = request.user)
+
+            # update name
+            if request.form.cleaned_data.get('name'):
+                q.update(set__shared_with__name = request.form.cleaned_data.get('name'))
+
+            # update parents
             parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
-            q = Cell.objects.filter(Q(roots__contains = cell) | Q(pk = cell.pk))
-            q.update(pull_all__roots = cell.roots)
+            q.update(pull_all__shared_with__roots = cell.roots)
             q.update(push_all__roots = [parent] + parent.roots)
+
+        else:
+            # update name
+            if request.form.cleaned_data.get('name'):
+                cell.name = request.form.cleaned_data.get('name')
+                cell.save()
+
+            # update parents
+            if len(request.form.cleaned_data.get('parent', '')):
+                parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
+                q = Cell.objects.filter(Q(roots__contains = cell) | Q(pk = cell.pk))
+                q.update(pull_all__roots = cell.roots)
+                q.update(push_all__roots = [parent] + parent.roots)
 
         cell.reload()
         return cell

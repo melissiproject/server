@@ -121,7 +121,7 @@ def test_multiple_users(function, self, *args, **kwargs):
                           postdata,
                           **data['auth'])
 
-        # print response.content
+        print response.content
 
         self.assertEqual(response.status_code, dic['response_code'][user])
 
