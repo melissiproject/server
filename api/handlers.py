@@ -5,9 +5,9 @@ from django import forms
 from mongoengine.queryset import DoesNotExist
 from mongoengine.base import ValidationError as MongoValidationError
 from django.db import IntegrityError, transaction
+from mongoengine.django.auth import User
 from mongoengine import Q
 from django.http import Http404
-from mongoengine.django.auth import User
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.core.validators import MinValueValidator
@@ -18,7 +18,7 @@ import re
 
 from piston.decorator import decorator
 
-from mlscommon.entrytypes import Droplet, Cell, Revision, Share
+from mlscommon.entrytypes import Droplet, Cell, Revision, Share, MelissiUser
 from mlscommon.common import calculate_md5, patch_file, sendfile, myFileField
 
 import settings
@@ -462,6 +462,11 @@ class CellShareHandler(BaseHandler):
             # we didn't find the user, create one share now
             cell.shared_with.append(Share(user=user,
                                           mode=request.form.cleaned_data['mode'],
+                                          name=cell.name,
+                                          roots=[Cell.objects.get(name='melissi',
+                                                                  owner=user,
+                                                                  roots__size = 0,
+                                                                  )],
                                           )
                                     )
         cell.save()
@@ -512,7 +517,8 @@ class CellUpdateForm(forms.Form):
 class CellHandler(BaseHandler):
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('pk','name', 'roots', 'owner', 'created', 'updated', 'deleted')
+    fields = ('pk','name', 'roots', 'owner',
+              'created', 'updated', 'deleted')
     depth = 2
 
     @add_server_timestamp
@@ -554,18 +560,26 @@ class CellHandler(BaseHandler):
 
         # if cell is root of shared and user is not owned then, change
         # values in shared_with
-        if len(cell.shared_with) != 0 and cell.owner != request.user:
-            q = Cell.objects.get(pk = cell.pk, shared_with__user = request.user)
+        if len(cell.shared_with) != 0 and cell.owner.pk != request.user.pk:
+            q = Cell.objects.filter(pk = cell.pk, shared_with__user = request.user)
+            for share in cell.shared_with:
+                if share.user == request.user:
+                    # update name
+                    if request.form.cleaned_data.get('name'):
+                        share.name = request.form.cleaned_data.get('name')
 
-            # update name
-            if request.form.cleaned_data.get('name'):
-                q.update(set__shared_with__name = request.form.cleaned_data.get('name'))
+                    # update parents
+                    if request.form.cleaned_data.get('parent'):
+                        parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
+                        share.roots = [parent] + parent.roots
 
-            # update parents
-            parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
-            q.update(pull_all__shared_with__roots = cell.roots)
-            q.update(push_all__roots = [parent] + parent.roots)
+                    cell.save()
+                    break
 
+            # return cell with modified name and roots to match user
+            cell.name = share.name
+            cell.roots = share.roots
+            return cell
         else:
             # update name
             if request.form.cleaned_data.get('name'):
@@ -579,8 +593,8 @@ class CellHandler(BaseHandler):
                 q.update(pull_all__roots = cell.roots)
                 q.update(push_all__roots = [parent] + parent.roots)
 
-        cell.reload()
-        return cell
+            cell.reload()
+            return cell
 
     @add_server_timestamp
     @check_write_permission
@@ -633,10 +647,10 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     @validate(UserCreateForm, ('POST',))
     def create(self, request):
         if getattr(settings, 'MELISI_REGISTRATIONS_OPEN', False):
-            user = User.create_user(request.form.cleaned_data['username'],
-                                    request.form.cleaned_data['password'],
-                                    request.form.cleaned_data['email']
-                                    )
+            user = MelissiUser.create_user(request.form.cleaned_data['username'],
+                                           request.form.cleaned_data['password'],
+                                           request.form.cleaned_data['email']
+                                           )
             user.first_name = request.form.cleaned_data['first_name']
             user.last_name = request.form.cleaned_data['last_name']
             user.save()
@@ -667,10 +681,10 @@ class UserHandler(BaseHandler):
     @validate(UserCreateForm, ('POST',))
     def create(self, request):
         if request.user.is_staff or request.user.is_superuser:
-            user = User.create_user(request.form.cleaned_data['username'],
-                                    request.form.cleaned_data['password'],
-                                    request.form.cleaned_data['email']
-                                    )
+            user = MelissiUser.create_user(request.form.cleaned_data['username'],
+                                           request.form.cleaned_data['password'],
+                                           request.form.cleaned_data['email']
+                                           )
             user.first_name = request.form.cleaned_data['first_name']
             user.last_name = request.form.cleaned_data['last_name']
             user.save()
@@ -719,25 +733,37 @@ class StatusHandler(BaseHandler):
             except (ValueError, TypeError), error_message:
                 return rc.BAD_REQUEST
 
-        s = Share(user=request.user, mode='wara')
-        s1 = Share(user=request.user, mode='wnra')
-        cells = Cell.objects.filter(Q(owner=request.user) |
-                                    Q(shared_with__contains = s1) |
-                                    Q(shared_with__contains = s)
-                                     )
-        c = Cell.objects.filter( Q(pk__in = cells) | Q(roots__in = cells) )
-        droplets = []
-        map(lambda x: droplets.append(x), Droplet.objects.filter(cell__in = c,
-                                                                 revisions__not__size = 0,
-                                                                 updated__gte = timestamp,
-                                                                 ))
+        cells = Cell.objects.filter(owner=request.user)
+        c = Cell.objects.filter(Q(pk__in = cells) |\
+                                Q(shared_with__roots__in = cells)
+                                )
+
+        # use set() and not list() to avoid double entries
+        droplets = set()
+        map(lambda x: droplets.add(x), Droplet.objects.filter(cell__in = c,
+                                                              revisions__not__size = 0,
+                                                              updated__gte = timestamp,
+                                                              ))
 
         # filter cells based on timestamp
         c = Cell.objects.filter(pk__in = c,
                                 updated__gte = timestamp)
-        cells = []
-        map(lambda x: cells.append(x), c)
 
+        # add force-add all droplets from updated cells
+        map(lambda x: droplets.add(x), Droplet.objects.filter(cell__in = c,
+                                                              revisions__not__size = 0,
+                                                              ))
+
+        # we have to code a faster, nicer way to do the translation
+        cells = set()
+        for cell in c:
+            if len(cell.shared_with) != 0 and cell.owner.pk != request.user.pk:
+                for share in cell.shared_with:
+                    if share.user.pk == request.user.pk:
+                        cell.name = share.name
+                        cell.roots = share.roots
+                        break
+            cells.add(cell)
 
         return {'cells': cells, 'droplets': droplets }
 

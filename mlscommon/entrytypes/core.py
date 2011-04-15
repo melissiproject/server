@@ -8,6 +8,16 @@ from mongoengine.django.auth import User
 from mongoengine.queryset import QuerySet
 from mongoengine.base import ValidationError as MongoValidationError
 
+class MelissiUser(User):
+    @classmethod
+    def create_user(cls, username, password, email=None):
+        user = super(MelissiUser, cls).create_user(username, password, email)
+        # create melissi cell
+        cell = Cell(name='melissi', owner=user, roots=[])
+        cell.save()
+
+        return user
+
 class Share(EmbeddedDocument):
     user = ReferenceField(User)
     mode = StringField(required=True)

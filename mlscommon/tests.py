@@ -44,14 +44,11 @@ class AuthTestCase(TestCase):
         pass
 
     def teardown(self, full=False):
-        map(lambda x: x.delete(), Cell.objects.all())
-
-        # from pymongo.connection import Connection
-        # self.connection = Connection()
-        # self.db = self.connection['melisi-example']
-
         if full:
+            map(lambda x: x.delete(), Cell.objects.all())
             map(lambda x: x.delete(), User.objects.all())
+        else:
+            map(lambda x: x.delete(), Cell.objects.filter(name__ne = 'melissi'))
 
     def auth(self, username, password):
         auth = '%s:%s' % (username, password)
@@ -70,7 +67,7 @@ class AuthTestCase(TestCase):
         user['auth'] = self.auth(user['username'], user['password'])
 
         try:
-            u = User.create_user(user['username'], user['password'], user['email'])
+            u = MelissiUser.create_user(user['username'], user['password'], user['email'])
             u.is_superuser = True
             u.is_staff = True
             u.save()
@@ -87,7 +84,7 @@ class AuthTestCase(TestCase):
         user['auth'] = self.auth(user['username'], user['password'])
 
         try:
-            User.create_user(user['username'], user['password'], user['email'])
+            MelissiUser.create_user(user['username'], user['password'], user['email'])
         except OperationError:
             pass
 
@@ -121,7 +118,7 @@ def test_multiple_users(function, self, *args, **kwargs):
                           postdata,
                           **data['auth'])
 
-        print response.content
+        # print response.content
 
         self.assertEqual(response.status_code, dic['response_code'][user])
 
@@ -178,7 +175,7 @@ class UserTest(AuthTestCase):
     @test_multiple_users
     def test_get_user(self):
         # Prepare
-        User.create_user(self.username, self.password, self.email)
+        MelissiUser.create_user(self.username, self.password, self.email)
 
         dic = {
             'response_code': {'user': 401,
@@ -196,7 +193,7 @@ class UserTest(AuthTestCase):
     def test_update_user(self):
         # Prepare
         def setup():
-            User.create_user(self.username, self.password, self.email)
+            MelissiUser.create_user(self.username, self.password, self.email)
 
         def teardown():
             User.objects(username=self.username).delete()
@@ -226,7 +223,7 @@ class UserTest(AuthTestCase):
     def test_delete_user(self):
         # Prepare
         def setup():
-            User.create_user(self.username, self.password, self.email)
+            MelissiUser.create_user(self.username, self.password, self.email)
 
         def teardown():
             User.objects(username=self.username).delete()
@@ -1593,10 +1590,9 @@ class ShareTest(AuthTestCase):
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
             c = Cell(name="c1", owner=u)
-            s = Share(user = u1, mode='wara')
+            s = Share(user = u1, mode='wara', name=c.name )
             c.shared_with.append(s)
             c.save()
-
             return { 'cell_id': c.pk }
 
         dic = {
@@ -1616,6 +1612,82 @@ class ShareTest(AuthTestCase):
             }
 
         return dic
+
+
+    @test_multiple_users
+    def test_write_shared_cell_move_owner(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            mc = Cell(name="melissi u", owner=u)
+            mc.save()
+            mc_2 = Cell(name="subfolder u", owner=u)
+            mc_2.save()
+
+            u1 = User.objects.get(username="bar")
+            mc1 = Cell(name="melissi u1", owner=u1)
+            mc1.save()
+
+            c = Cell(name="c1", owner=u, roots=[mc])
+            s = Share(user = u1, mode='wara', name=c.name, roots=[mc1] )
+            c.shared_with.append(s)
+            c.save()
+            return { 'cell_id': c.pk, 'mc_2':mc_2.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'users': self.users,
+            'postdata': { 'parent': '%(mc_2)s', 'name':'newname' },
+            'url': '/api/cell/%(cell_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              'partner': 401,
+                              },
+            'content': '%(mc_2)s'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_write_shared_cell_move_partner(self):
+        def setup():
+            u = User.objects.get(username="foo")
+            mc = Cell(name="melissi u", owner=u)
+            mc.save()
+
+            u1 = User.objects.get(username="bar")
+            mc1 = Cell(name="melissi u1", owner=u1)
+            mc1.save()
+            mc1_2 = Cell(name="subfolder u1", owner=u1)
+            mc1_2.save()
+
+            c = Cell(name="c1", owner=u, roots=[mc])
+            s = Share(user = u1, mode='wara', name=c.name, roots=[mc1] )
+            c.shared_with.append(s)
+            c.save()
+            return { 'cell_id': c.pk, 'mc1_2':mc1_2.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'users': self.users,
+            'postdata': { 'parent': '%(mc1_2)s', 'name':'newname' },
+            'url': '/api/cell/%(cell_id)s/',
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 401,
+                              'partner': 200,
+                              },
+            'content': '%(mc1_2)s'
+            }
+
+        return dic
+
 
     @test_multiple_users
     def test_write_shared_droplet(self):
@@ -1728,7 +1800,7 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            u2 = User.create_user("sharetest", "123", "test@example.com")
+            u2 = MelissiUser.create_user("sharetest", "123", "test@example.com")
             c = Cell(name="c1", owner=u)
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
@@ -1865,7 +1937,7 @@ class StatusTest(AuthTestCase):
 
         def extra_checks(response):
             result = json.loads(response.content)
-            self.assertEqual(len(result['reply']['cells']), 3)
+            self.assertEqual(len(result['reply']['cells']), 4)
             self.assertEqual(len(result['reply']['droplets']), 3)
 
         dic = {
@@ -1940,7 +2012,7 @@ class StatusTest(AuthTestCase):
 
         def extra_checks(response):
             result = json.loads(response.content)
-            self.assertEqual(len(result['reply']['cells']), 2)
+            self.assertEqual(len(result['reply']['cells']), 3)
             self.assertEqual(len(result['reply']['droplets']), 2)
 
         dic = {
@@ -2017,7 +2089,7 @@ class StatusTest(AuthTestCase):
 
         def extra_checks(response):
             result = json.loads(response.content)
-            self.assertEqual(len(result['reply']['cells']), 1)
+            self.assertEqual(len(result['reply']['cells']), 2)
             self.assertEqual(len(result['reply']['droplets']), 1)
 
         dic = {
