@@ -1247,7 +1247,7 @@ class RevisionTest(AuthTestCase):
 
 
     @test_multiple_users
-    def test_update_revision(self):
+    def test_update_revision_patch(self):
         import hashlib
         import tempfile
 
@@ -1296,6 +1296,62 @@ class RevisionTest(AuthTestCase):
                           'md5': '3749f52bb326ae96782b42dc0a97b4c1', # md5 of '0123456789'
                           'content': delta,
                           'patch':'True',
+                          },
+            'content': 'created'
+            }
+
+        return dic
+
+    @test_multiple_users
+    def test_update_revision_nopatch(self):
+        import hashlib
+        import tempfile
+
+        content = tempfile.TemporaryFile()
+        content.write('123456')
+        content.seek(0)
+        delta = tempfile.TemporaryFile()
+        delta.write('0123456789\n')
+        delta.seek(0)
+        md5 = hashlib.md5(content.read()).hexdigest()
+        content.seek(0)
+
+        def setup():
+            # rewind file
+            content.seek(0)
+            delta.seek(0)
+
+            u = User.objects.get(username="foo")
+            # create cell
+            c1 = Cell(name="c1", owner=u)
+            c1.save()
+
+            # create droplet
+            d = Droplet(name="d1", owner=u, cell=c1)
+            d.save()
+
+            # create revision
+            r = Revision(user=u, content=content)
+            d.revisions.append(r)
+            d.save()
+
+            return { 'droplet_id' : d.pk }
+
+        dic = {
+            'setup': setup,
+            'teardown': self.teardown,
+            'method': 'put',
+            'url': '/api/droplet/%(droplet_id)s/revision/',
+            'users': self.users,
+            'response_code': {'user': 401,
+                              'admin': 401,
+                              'anonymous': 401,
+                              'owner': 200,
+                              },
+            'postdata': { 'number': '1',
+                          'md5': '3749f52bb326ae96782b42dc0a97b4c1', # md5 of '0123456789'
+                          'content': delta,
+                          'patch':'False',
                           },
             'content': 'created'
             }
