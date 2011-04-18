@@ -171,6 +171,75 @@ def check_write_permission(function, self, request, *args, **kwargs):
     return function(self, request, *args, **kwargs)
 
 
+def _recursive_update_shares(cell, request_user):
+    """
+    1. find all these users (variable sharing_users)
+    2. for each shared cell of the tree just moved add a
+       new share for each of the sharing_users with the
+       same permissions as the owner of the tree
+
+       Return the number of new shares created
+    """
+    number_of_shares_created = 0
+    try:
+        if request_user == cell.owner:
+            parent=cell
+        else:
+            for share in cell.shared_with:
+                if share.user.pk == request_user.pk:
+                    parent = share.roots[0]
+                    break
+            else:
+                raise IndexError
+
+    except IndexError:
+        # no parent, no need to do anything recursive
+        return number_of_shares_created
+
+    try:
+        sharing_users = Cell.objects.get(pk__in=[parent.pk] + parent.roots,
+                                         shared_with__not__size=0)
+
+    except Cell.DoesNotExist:
+        # the tree is not shared with anyone else. no worries
+        pass
+
+    else:
+        # the tree is shared, locate all shared
+        # cells of the tree just moved and create
+        # new shares
+        shared_cells = Cell.objects.filter((Q(roots=cell.pk) |\
+                                            Q(pk=cell.pk) |\
+                                            Q(shared_with__roots=cell.pk)
+                                            ) &\
+                                           Q(shared_with__not__size=0)
+                                           )
+
+        for shared_cell in shared_cells:
+            # locate share of current user, so we
+            # can copy name and mode
+            current_user_share = None
+            for share in shared_cell.shared_with:
+                if share.user.pk == request_user.pk:
+                    current_user_share = share
+                    break
+            else:
+                continue
+
+            # now add the shares
+            for user in sharing_users.shared_with:
+                s = Share(user = user.user,
+                          mode = user.mode,
+                          name = current_user_share.name,
+                          roots = [parent.pk]
+                          )
+                shared_cell.shared_with.append(s)
+                number_of_shares_created += 1
+
+            shared_cell.save()
+
+    return number_of_shares_created
+
 class RevisionCreateForm(forms.Form):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(0)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
@@ -469,7 +538,12 @@ class CellShareHandler(BaseHandler):
                                                                   )],
                                           )
                                     )
+
         cell.save()
+
+        # create shares for all subshares of folder
+        _recursive_update_shares(cell, request.user)
+
         return rc.CREATED
 
     @add_server_timestamp
@@ -561,7 +635,7 @@ class CellHandler(BaseHandler):
         # if cell is root of shared and user is not owned then, change
         # values in shared_with
         if len(cell.shared_with) != 0 and cell.owner.pk != request.user.pk:
-            q = Cell.objects.filter(pk = cell.pk, shared_with__user = request.user)
+            print "changing shared with"
             for share in cell.shared_with:
                 if share.user == request.user:
                     # update name
@@ -573,14 +647,21 @@ class CellHandler(BaseHandler):
                         parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
                         share.roots = [parent] + parent.roots
 
-                    cell.save()
                     break
+
+            cell.save()
+
+            # if the new parent tree is shared with other users then:
+            _recursive_update_shares(cell, request.user)
 
             # return cell with modified name and roots to match user
             cell.name = share.name
             cell.roots = share.roots
+
             return cell
+
         else:
+            print "changing roots"
             # update name
             if request.form.cleaned_data.get('name'):
                 cell.name = request.form.cleaned_data.get('name')
@@ -601,7 +682,16 @@ class CellHandler(BaseHandler):
     @watchdog_notfound
     def delete(self, request, cell_id):
         cell = Cell.objects.get(pk = cell_id)
-        cell.set_deleted()
+
+        if cell.owner.pk != request.user.pk and len(cell.shared_with) > 0:
+            # user want to delete share, not folder
+            for share in cell.shared_with:
+                if share.user == request.user:
+                    cell.shared_with.remove(share)
+                    cell.save()
+                    break
+        else:
+            cell.set_deleted()
 
         return rc.DELETED
 
@@ -733,8 +823,10 @@ class StatusHandler(BaseHandler):
             except (ValueError, TypeError), error_message:
                 return rc.BAD_REQUEST
 
-        cells = Cell.objects.filter(owner=request.user)
+        cells = Cell.objects.filter(Q(owner=request.user) |\
+                                    Q(shared_with__user = request.user))
         c = Cell.objects.filter(Q(pk__in = cells) |\
+                                Q(roots__in = cells) |\
                                 Q(shared_with__roots__in = cells)
                                 )
 
@@ -765,5 +857,10 @@ class StatusHandler(BaseHandler):
                         break
             cells.add(cell)
 
-        return {'cells': cells, 'droplets': droplets }
+        d = []
+        for drop in droplets:
+            if drop not in d:
+                d.append(drop)
+
+        return {'cells': cells, 'droplets': d }
 
