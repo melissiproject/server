@@ -635,7 +635,6 @@ class CellHandler(BaseHandler):
         # if cell is root of shared and user is not owned then, change
         # values in shared_with
         if len(cell.shared_with) != 0 and cell.owner.pk != request.user.pk:
-            print "changing shared with"
             for share in cell.shared_with:
                 if share.user == request.user:
                     # update name
@@ -661,7 +660,6 @@ class CellHandler(BaseHandler):
             return cell
 
         else:
-            print "changing roots"
             # update name
             if request.form.cleaned_data.get('name'):
                 cell.name = request.form.cleaned_data.get('name')
