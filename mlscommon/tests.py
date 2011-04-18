@@ -1688,7 +1688,6 @@ class ShareTest(AuthTestCase):
 
         return dic
 
-
     @test_multiple_users
     def test_write_shared_droplet(self):
         def setup():
@@ -1873,6 +1872,63 @@ class ShareTest(AuthTestCase):
 
         return dic
 
+    @test_multiple_users
+    def test_recursive_share_cell(self):
+        def setup():
+            user_tza = self.create_user(username='tza', email='tza@example.com')
+            user_foo = User.objects.get(username='foo')
+            user_bar = User.objects.get(username='bar')
+
+            user_bar_root = Cell.objects.get(owner=user_bar)
+            user_foo_root = Cell.objects.get(owner=user_foo)
+
+            c0 = Cell(name='0', owner=user_foo, roots=[user_foo_root])
+            c0.save()
+
+            c1 = Cell(name='1', owner=user_bar, roots=[user_bar_root])
+            c1.shared_with.append(Share(name='1',
+                                        user=user_foo,
+                                        mode='wara',
+                                        roots = [c0, user_foo_root]
+                                        )
+                                  )
+            c1.save()
+
+            return { 'cell_id': c0.pk }
+
+        def extra_checks(response):
+            c1 = Cell.objects.get(name='1')
+            self.assertEqual(len(c1.shared_with), 2)
+
+            c0 = Cell.objects.get(name='0')
+            self.assertEqual(len(c0.shared_with), 1)
+
+        def teardown():
+            # delete user tza
+            User.objects.get(username='tza').delete()
+            self.teardown()
+
+        dic = {
+            'setup':setup,
+            'teardown': teardown,
+            'postdata': {'user': 'tza',
+                         'mode': 'wara',
+                         },
+            'response_code': { 'user': 401,
+                               'admin': 401,
+                               'anonymous': 401,
+                               'owner': 201,
+                               'partner': 401,
+                               },
+            'users': self.users,
+            'method': 'post',
+            'url': '/api/cell/%(cell_id)s/share/',
+            'checks': {'owner': extra_checks }
+            }
+
+        return dic
+
+
 class StatusTest(AuthTestCase):
     def setUp(self):
         self.users = {
@@ -1969,7 +2025,7 @@ class StatusTest(AuthTestCase):
             c = Cell(name="c1", owner=u)
             c.save()
             # force updated timestamp
-            Cell.objects(pk=c.pk).update(set__updated=now)
+            Cell.objects(pk=c.pk).update(set__updated=a_month_ago)
 
             c1 = Cell(name="c2", owner=u, roots=[c])
             c1.save()
@@ -1991,7 +2047,6 @@ class StatusTest(AuthTestCase):
             # force updated timestamp
             Droplet.objects(pk=d.pk).update(set__updated=now)
 
-
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
             r = Revision(user=u)
@@ -2012,7 +2067,7 @@ class StatusTest(AuthTestCase):
 
         def extra_checks(response):
             result = json.loads(response.content)
-            self.assertEqual(len(result['reply']['cells']), 3)
+            self.assertEqual(len(result['reply']['cells']), 2)
             self.assertEqual(len(result['reply']['droplets']), 2)
 
         dic = {
@@ -2044,7 +2099,7 @@ class StatusTest(AuthTestCase):
             c = Cell(name="c1", owner=u)
             c.save()
             # force updated timestamp
-            Cell.objects(pk=c.pk).update(set__updated=now)
+            Cell.objects(pk=c.pk).update(set__updated=a_month_ago)
 
             c1 = Cell(name="c2", owner=u, roots=[c])
             c1.save()
@@ -2065,7 +2120,6 @@ class StatusTest(AuthTestCase):
             d.save()
             # force updated timestamp
             Droplet.objects(pk=d.pk).update(set__updated=now)
-
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
@@ -2089,7 +2143,7 @@ class StatusTest(AuthTestCase):
 
         def extra_checks(response):
             result = json.loads(response.content)
-            self.assertEqual(len(result['reply']['cells']), 2)
+            self.assertEqual(len(result['reply']['cells']), 1)
             self.assertEqual(len(result['reply']['droplets']), 1)
 
         dic = {
