@@ -58,7 +58,7 @@ class Cell(Document):
 
         # ensure that shared_with has values only for one cell in a tree
         if len(self.shared_with) and Cell.objects.filter(pk__in = self.roots,
-                                                         roots__not__size = 0).count():
+                                                         shared_with__not__size = 0).count():
             raise MongoValidationError("Multiple shares in the same tree")
 
         # ensure that name and roots are unique
