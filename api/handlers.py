@@ -37,7 +37,11 @@ def validate(v_form, operations):
             request.form = form
             return function(self, request, *args, **kwargs)
         else:
-            raise FormValidationError(form)
+            error_list = {}
+            for key, value in form.errors.items():
+                error_list[key] = value
+
+            return { 'errors': error_list }
     return wrap
 
 @decorator
