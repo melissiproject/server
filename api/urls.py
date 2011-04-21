@@ -1,8 +1,7 @@
 from django.conf.urls.defaults import *
-from piston.resource import Resource
+from resource import Resource
 from piston.authentication import HttpBasicAuthentication
 from django.views.generic.simple import redirect_to
-
 
 from melisi.api.handlers import CellHandler, CellShareHandler, \
      DropletHandler, RevisionHandler, RevisionContentHandler, \

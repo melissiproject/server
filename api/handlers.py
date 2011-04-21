@@ -1,13 +1,11 @@
 from piston.handler import BaseHandler, AnonymousBaseHandler
 from piston.utils import rc, FormValidationError
-from django.shortcuts import get_object_or_404, get_list_or_404
 from django import forms
 from mongoengine.queryset import DoesNotExist
 from mongoengine.base import ValidationError as MongoValidationError
 from django.db import IntegrityError, transaction
 from mongoengine.django.auth import User
 from mongoengine import Q
-from django.http import Http404
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.core.validators import MinValueValidator
@@ -20,6 +18,8 @@ from piston.decorator import decorator
 
 from mlscommon.entrytypes import Droplet, Cell, Revision, Share, MelissiUser
 from mlscommon.common import calculate_md5, patch_file, sendfile, myFileField
+
+from exceptions import APIBadRequest, APIForbidden, APINotFound
 
 import settings
 
@@ -37,11 +37,8 @@ def validate(v_form, operations):
             request.form = form
             return function(self, request, *args, **kwargs)
         else:
-            error_list = {}
-            for key, value in form.errors.items():
-                error_list[key] = value
+            raise FormValidationError(form)
 
-            return { 'errors': error_list }
     return wrap
 
 @decorator
@@ -58,13 +55,13 @@ def watchdog_notfound(function, self, request, *args, **kwargs):
     except DoesNotExist, error:
         if getattr(settings, 'DEBUG', True):
             print error
-        return rc.NOT_FOUND
+        raise APINotFound({'error': "Object not found"})
 
     # object id not valid
     except MongoValidationError, error:
         if getattr(settings, 'DEBUG', True):
             print error
-        return rc.BAD_REQUEST
+        raise APIBadRequest({'error': str(error)})
 
 
 def _check_read_permission_obj(obj, user):
@@ -87,12 +84,12 @@ def check_read_permission(function, self, request, *args, **kwargs):
     if isinstance(self, CellHandler):
         cell = Cell.objects.get(pk=args[0])
         if not _check_read_permission_obj(cell, request.user):
-            return rc.FORBIDDEN
+            raise APIForbidden({'cell': "You don't have permission to access cell %s" % args[0]})
 
     elif isinstance(self, CellShareHandler):
         cell = Cell.objects.get(pk=args[0])
         if not cell.owner.pk == request.user.pk:
-            return rc.FORBIDDEN
+            raise APIForbidden({'cell': "You don't have permission to read share list of cell %s" % args[0]})
 
     elif isinstance(self, DropletHandler) or \
              isinstance(self, RevisionHandler) or \
@@ -100,7 +97,7 @@ def check_read_permission(function, self, request, *args, **kwargs):
              isinstance(self, RevisionPatchHandler):
         droplet = Droplet.objects.get(pk=args[0])
         if not _check_read_permission_obj(droplet.cell, request.user):
-            return rc.FORBIDDEN
+            raise APIForbidden({'droplet': "You don't have permission to access droplet %s" % args[0]})
 
     return function(self, request, *args, **kwargs)
 
@@ -122,14 +119,13 @@ def check_write_permission(function, self, request, *args, **kwargs):
     """Check that the user has read permission
 
     """
-
     cell = None
     if isinstance(self, CellHandler):
         if request.META['REQUEST_METHOD'] in ('PUT', 'DELETE'):
             # check cell
             cell = Cell.objects.get(pk = args[0])
             if not _check_write_permission_obj(cell, request.user):
-                return rc.FORBIDDEN
+                raise APIForbidden({'cell': "You don't have permission to write cell %s" % args[0]})
 
         # for create and update. in general when 'parent' is present
         # we must check that we can write to him
@@ -137,7 +133,7 @@ def check_write_permission(function, self, request, *args, **kwargs):
             # check parent
             parent = Cell.objects.get(pk = request.POST['parent'])
             if not _check_write_permission_obj(parent, request.user):
-                return rc.FORBIDDEN
+                raise APIForbidden({'cell': "You don't have permission to write cell %s" % parent.pk})
 
     elif isinstance(self, CellShareHandler):
         cell = Cell.objects.get(pk = args[0])
@@ -146,34 +142,34 @@ def check_write_permission(function, self, request, *args, **kwargs):
                                     shared_with__not__size = 0)
         except DoesNotExist, error:
             if cell.owner.pk != request.user.pk:
-                return rc.FORBIDDEN
+                raise APIForbidden({'cell': "You don't have permission to share cell %s" % args[0]})
+
         else:
             if root.owner.pk != request.user.pk and \
                    request.META['REQUEST_METHOD'] != 'DELETE':
                 # DELETE is special case, because user can delete himself
                 # from a share, without being owner of the root cell
                 # Permission checks MUST be done at ShareHandler delete()
-                return rc.FORBIDDEN
+                raise APIForbidden({'cell': "You don't have permission to delete cell %s" % args[0]})
 
     elif isinstance(self, DropletHandler):
         if request.META['REQUEST_METHOD'] in ('DELETE', 'PUT') :
             droplet = Droplet.objects.get(pk = args[0])
             cell = droplet.cell
             if not _check_write_permission_obj(cell, request.user):
-                return rc.FORBIDDEN
+                raise APIForbidden({'droplet': "You don't have permission to write droplet %s" % args[0]})
 
         if 'cell' in request.POST:
             cell = Cell.objects.get(pk = request.POST['cell'])
             if not _check_write_permission_obj(cell, request.user):
-                return rc.FORBIDDEN
+                raise APIForbidden({'droplet': "You don't have permission to write cell %s" % cell.pk})
 
     elif isinstance(self, RevisionHandler):
         droplet = Droplet.objects.get(pk = args[0])
         if not _check_write_permission_obj(droplet.cell, request.user):
-            return rc.FORBIDDEN
+            raise APIForbidden({'droplet': "You don't have permission to write droplet %s" % args[0]})
 
     return function(self, request, *args, **kwargs)
-
 
 def _recursive_update_shares(cell, request_user):
     """
@@ -287,13 +283,14 @@ class RevisionHandler(BaseHandler):
         else:
             revision_id = int(revision_id) - 1
             if revision_id < 0:
-                return rc.BAD_REQUEST
+                raise APIBadRequest({'revision_id': 'Invalid revision number'})
 
             try:
                 return droplet.revisions[revision_id]
             except IndexError:
-                return rc.NOT_FOUND
-
+                raise APINotFound({'revision': 'Revision with id %s not found'%\
+                                   revision_id + 1}
+                                  )
 
     @add_server_timestamp
     @check_write_permission
@@ -309,7 +306,10 @@ class RevisionHandler(BaseHandler):
         # verify integrity
         if revision.content.md5 != request.form.cleaned_data['md5']:
             revision.content.delete()
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'md5': 'Content hashes do not match %s VS %s' %\
+                                 (revision.content.md5, request.form.cleaned_data['md5'])
+                                 }
+                                )
 
         droplet = Droplet.objects.get(pk=droplet_id)
         droplet.revisions.append(revision)
@@ -327,7 +327,9 @@ class RevisionHandler(BaseHandler):
         try:
             previous_revision = droplet.revisions[request.form.cleaned_data['number'] - 1]
         except IndexError:
-            return rc.BAD_REQUEST
+            raise APINotFound({'revision': 'Request to updated non existing revision with id %s' %\
+                               request.form.cleaned_data['number'] - 1
+                               })
 
         revision = Revision()
         revision.user = request.user
@@ -346,7 +348,10 @@ class RevisionHandler(BaseHandler):
         # verify integrity
         if revision.content.md5 != request.form.cleaned_data['md5']:
             revision.content.delete()
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'md5': 'Content hashes do not match %s VS %s' %\
+                                 (revision.content.md5, request.form.cleaned_data['md5'])
+                                 }
+                                )
 
         droplet.revisions.append(revision)
         droplet.save()
@@ -359,13 +364,16 @@ class RevisionHandler(BaseHandler):
         droplet = Droplet.objects.get(pk=droplet_id)
         revision_id = int(revision_id) - 1
         if revision_id < 0:
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'revision': 'Invalid revision number: %s' %\
+                                 revision_id
+                                 })
 
         try:
             droplet.revisions.pop(revision_id)
         except IndexError:
-            return rc.NOT_FOUND
-
+            raise APINotFound({'revision': 'Revision with id %s not found'%\
+                               revision_id + 1}
+                              )
         droplet.save()
 
         return rc.DELETED
@@ -380,13 +388,16 @@ class RevisionContentHandler(BaseHandler):
 
         revision_id = int(revision_id) -1
         if revision_id < 0:
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'revision': 'Invalid revision number: %s' %\
+                                 revision_id
+                                 })
 
         try:
             return sendfile(droplet.revisions[revision_id].content, droplet.name)
         except IndexError:
-            return rc.NOT_FOUND
-
+            raise APINotFound({'revision': 'Revision with id %s not found'%\
+                               revision_id + 1}
+                              )
 
 class RevisionPatchHandler(BaseHandler):
     allowed_methods = ('GET',)
@@ -402,13 +413,17 @@ class RevisionPatchHandler(BaseHandler):
         if revision_id < 1:
             # this is < 1 because revision 1 does not have a
             # patch!
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'revision': 'Invalid revision number: %s. Patching needs at least an existing revision' %\
+                         revision_id
+                         })
+
 
         try:
             return sendfile(droplet.revisions[revision_id].patch, "%s.patch" % droplet.name)
         except IndexError:
-            return rc.NOT_FOUND
-
+            raise APINotFound({'revision': 'Revision with id %s not found'%\
+                               revision_id + 1}
+                              )
 
 class DropletCreateForm(forms.Form):
     name = forms.CharField(max_length=500, min_length=1, required=True)
@@ -525,7 +540,7 @@ class CellShareHandler(BaseHandler):
         cell = Cell.objects.get(pk=cell_id)
         if Cell.objects.filter(pk__in = cell.roots,
                                shared_with__not__size = 0).count():
-            return rc.BAD_REQUEST
+            raise APIBadRequest({'share': 'Another folder in the same tree is shared'})
 
         for share in cell.shared_with:
             if share.user == user:
@@ -565,7 +580,7 @@ class CellShareHandler(BaseHandler):
             if request.user.pk != root.owner.pk and request.user.pk != user.pk:
                 # user is not owner and tries to delete another user
                 # from share
-                return rc.FORBIDDEN
+                raise APIForbidden({'share': "You don't have permission to delete user %s" % user.username})
 
             for share in cell.shared_with:
                 if share.user == user:
@@ -573,14 +588,16 @@ class CellShareHandler(BaseHandler):
                     cell.save()
                     break
             else:
-                return rc.NOT_FOUND
+                raise APINotFound({'share': 'User %s does not share cell'%\
+                                   user.username}
+                                  )
 
         else:
             # only owner can delete everything
             if request.user.pk == root.owner.pk:
                 Cell.objects(pk=root.pk).update(set__shared_with=[])
             else:
-                return rc.FORBIDDEN
+                raise APIForbidden({'share': "You don't have permission to delete shares of cell %s" % root.pk})
 
         return rc.DELETED
 
@@ -697,7 +714,6 @@ class CellHandler(BaseHandler):
 
         return rc.DELETED
 
-
 class UserCreateForm(forms.Form):
     username = forms.CharField(max_length=30, min_length=3)
     password = forms.CharField(max_length=30, min_length=3)
@@ -748,7 +764,7 @@ class AnonymousUserHandler(AnonymousBaseHandler):
             user.save()
             return user
         else:
-            return rc.FORBIDDEN
+            raise APIForbidden({'register': 'Registrations are closed'})
 
 class UserHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
@@ -767,7 +783,7 @@ class UserHandler(BaseHandler):
         if request.user.is_staff or request.user.is_superuser or request.user == user:
             return user
         else:
-            return rc.FORBIDDEN
+            raise APIForbidden({'user': "You don't have permission to access user details"})
 
     @add_server_timestamp
     @validate(UserCreateForm, ('POST',))
@@ -782,7 +798,7 @@ class UserHandler(BaseHandler):
             user.save()
             return user
         else:
-            return rc.FORBIDDEN
+            raise APIForbidden({'user': "You don't have permission to create new accounts"})
 
     @add_server_timestamp
     @validate(UserUpdateForm, ('POST',))
@@ -798,16 +814,15 @@ class UserHandler(BaseHandler):
             user.save()
             return user
         else:
-            return rc.FORBIDDEN
+            raise APIForbidden({'user': "You don't have permission to update details for user %s" % user.username})
 
     def delete(self, request, username):
-
         user = User.objects.get(username=username)
         if request.user.is_staff or request.user.is_superuser or request.user == user:
             user.delete()
             return rc.DELETED
         else:
-            return rc.FORBIDDEN
+            raise APIForbidden({'user': "You don't have permission to delete user %s" % user.username})
 
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
@@ -823,7 +838,7 @@ class StatusHandler(BaseHandler):
             try:
                 timestamp = datetime.fromtimestamp(float(timestamp))
             except (ValueError, TypeError), error_message:
-                return rc.BAD_REQUEST
+                raise APIBadRequest({'timestamp': 'Bad timestamp format'})
 
         cells = Cell.objects.filter(Q(owner=request.user) |\
                                     Q(shared_with__user = request.user))
@@ -865,4 +880,3 @@ class StatusHandler(BaseHandler):
                 d.append(drop)
 
         return {'cells': cells, 'droplets': d }
-
