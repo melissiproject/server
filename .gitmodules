@@ -1,0 +1,3 @@
+[submodule "librsync"]
+	path = librsync
+	url = git://gitorious.org/melissi/librsync.git
