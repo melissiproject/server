@@ -717,6 +717,7 @@ class CellHandler(BaseHandler):
 class UserCreateForm(forms.Form):
     username = forms.CharField(max_length=30, min_length=3)
     password = forms.CharField(max_length=30, min_length=3)
+    password2 = forms.CharField(max_length=30, min_length=3)
     first_name = forms.CharField(max_length=30, required=False)
     last_name = forms.CharField(max_length=30, required=False)
     email = forms.EmailField(max_length=30)
@@ -727,6 +728,10 @@ class UserCreateForm(forms.Form):
         # check hash
         if self.is_valid() and not re.match("\w+$", self.cleaned_data['username']):
             raise ValidationError("Not valid username")
+
+        # check passwords
+        if self.cleaned_data.get('password') != self.cleaned_data.get('password2'):
+            raise ValidationError("Passwords to not match")
 
         return self.cleaned_data
 
