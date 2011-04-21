@@ -43,8 +43,10 @@ def validate(v_form, operations):
 
 @decorator
 def add_server_timestamp(function, self, request, *args, **kwargs):
+    # we must log time before executing the function
+    t = time.time()
     r = function(self, request, *args, **kwargs)
-    return {'timestamp':time.time(), 'reply': r}
+    return {'timestamp':t, 'reply': r}
 
 @decorator
 def watchdog_notfound(function, self, request, *args, **kwargs):
@@ -534,10 +536,10 @@ class CellShareHandler(BaseHandler):
     @watchdog_notfound
     def create(self, request, cell_id):
         """ If user not in shared_with add him. If user in shared_with update entry """
+        cell = Cell.objects.get(pk=cell_id)
         user = request.form.cleaned_data['user']
 
         # check that a root is not shared
-        cell = Cell.objects.get(pk=cell_id)
         if Cell.objects.filter(pk__in = cell.roots,
                                shared_with__not__size = 0).count():
             raise APIBadRequest({'share': 'Another folder in the same tree is shared'})
@@ -692,6 +694,24 @@ class CellHandler(BaseHandler):
                 q = Cell.objects.filter(Q(roots__contains = cell) | Q(pk = cell.pk))
                 q.update(pull_all__roots = cell.roots)
                 q.update(push_all__roots = [parent] + parent.roots)
+                q.update(set__updated = datetime.now())
+
+                # update shared_with timestamps of shared root
+                # find parents of parent
+                try:
+                    c = Cell.objects.get((Q(pk__in=parent.roots) | Q(pk=parent.pk)) &\
+                                            Q(shared_with__not__size=0)
+                                            )
+
+                except:
+                    # tree is not shared, do nothing
+                    pass
+
+                else:
+                    timestamp = datetime.now()
+                    for share in c.shared_with:
+                        share.created = timestamp
+                    c.save()
 
             cell.reload()
             return cell
@@ -744,7 +764,6 @@ class UserUpdateForm(forms.Form):
 
     def clean(self):
         super(UserUpdateForm, self).clean()
-
         # check hash
         if self.is_valid() and not re.match("\w+$", self.cleaned_data['username']):
             raise ValidationError("Not valid username")
@@ -845,43 +864,64 @@ class StatusHandler(BaseHandler):
             except (ValueError, TypeError), error_message:
                 raise APIBadRequest({'timestamp': 'Bad timestamp format'})
 
-        cells = Cell.objects.filter(Q(owner=request.user) |\
-                                    Q(shared_with__user = request.user))
-        c = Cell.objects.filter(Q(pk__in = cells) |\
-                                Q(roots__in = cells) |\
-                                Q(shared_with__roots__in = cells)
+        status_droplets = []
+        status_cells = []
+
+        owned_cells = Cell.objects.filter(owner=request.user)
+
+        # add owned droplets after timestamp
+        map(lambda x: status_droplets.append(x),
+            Droplet.objects.filter(cell__in = owned_cells,
+                                   revisions__not__size = 0,
+                                   updated__gte = timestamp
+                                   )
+            )
+
+        # add owned cells after timestamp
+        map(lambda x: status_cells.append(x),
+            Cell.objects.filter(pk__in = owned_cells,
+                                updated__gte = timestamp
                                 )
+            )
 
-        # use set() and not list() to avoid double entries
-        droplets = set()
-        map(lambda x: droplets.add(x), Droplet.objects.filter(cell__in = c,
-                                                              revisions__not__size = 0,
-                                                              updated__gte = timestamp,
-                                                              ))
+        shared_cells_roots = Cell.objects.filter(shared_with__user = request.user)
+        # new_shared_cells = Cell.objects.filter(roots__in = new_shared_cells_roots)
 
-        # filter cells based on timestamp
-        c = Cell.objects.filter(pk__in = c,
-                                updated__gte = timestamp)
+        for cell in shared_cells_roots:
+            shared = filter(lambda x: x.user == request.user,
+                            cell.shared_with
+                            )[0]
+            cell.roots = shared.roots
+            cell.name = shared.name
 
-        # add force-add all droplets from updated cells
-        map(lambda x: droplets.add(x), Droplet.objects.filter(cell__in = c,
-                                                              revisions__not__size = 0,
-                                                              ))
+            if shared.created >= timestamp:
+                # this is a new share, force add everything
+                print "hi"
+                cells = Cell.objects.filter(roots__in = [cell])
+                map(lambda x: status_cells.append(x), cells)
+                map(lambda x: status_droplets.append(x),
+                    Droplet.objects.filter((Q(cell__in = cells) | Q(cell=cell)) & \
+                                           Q(revisions__not__size = 0)
+                                           )
+                )
 
-        # we have to code a faster, nicer way to do the translation
-        cells = set()
-        for cell in c:
-            if len(cell.shared_with) != 0 and cell.owner.pk != request.user.pk:
-                for share in cell.shared_with:
-                    if share.user.pk == request.user.pk:
-                        cell.name = share.name
-                        cell.roots = share.roots
-                        break
-            cells.add(cell)
+                # add self
+                status_cells.append(cell)
 
-        d = []
-        for drop in droplets:
-            if drop not in d:
-                d.append(drop)
+            else:
+                # this is an old share, add only new stuff
+                cells = Cell.objects.filter(Q(roots__in = [cell]) | Q(pk=cell))
+                map(lambda x: status_droplets.append(x),
+                    Droplet.objects.filter(cell__in = cells,
+                                           revisions__not__size = 0,
+                                           updated__gte = timestamp
+                                           )
+                    )
+                map(lambda x: status_cells.append(x),
+                    Cell.objects.filter(Q(roots__in = [cell]) | Q(pk=cell),
+                                        updated__gte = timestamp
+                                        )
+                    )
 
-        return {'cells': cells, 'droplets': d }
+
+        return {'cells':status_cells, 'droplets':status_droplets}
