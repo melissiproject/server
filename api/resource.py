@@ -11,6 +11,8 @@ class Resource(piston.resource.Resource):
         resp = rc.BAD_REQUEST
         error_list = {}
         for key, value in e.form.errors.items():
+            if key == '__all__':
+                key = 'generic'
             error_list[key] = value
 
         resp._set_content(error_list)
