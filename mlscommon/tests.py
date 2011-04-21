@@ -164,6 +164,31 @@ class UserTest(AuthTestCase):
                               },
             'postdata': {'username':'testuser',
                          'password':'123',
+                         'password2':'123',
+                         'email':'foo@example.com'
+                         },
+            'method':'post',
+            'url': '/api/user/',
+            'users': users
+            }
+        return dic
+
+    @test_multiple_users
+    def test_create_user_denied_password_verify(self):
+        def teardown():
+            User.objects(username='testuser').delete()
+
+        users = self.users.copy()
+        users.pop('owner')
+        dic = {
+            'teardown': teardown,
+            'response_code': {'user': 400,
+                              'admin': 400,
+                              'anonymous':400,
+                              },
+            'postdata': {'username':'testuser',
+                         'password':'123',
+                         'password2':'124',
                          'email':'foo@example.com'
                          },
             'method':'post',
