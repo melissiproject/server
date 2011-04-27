@@ -1,7 +1,18 @@
 import mongoengine
-mongoengine.connect('melisi-example')
-
 import os
+
 PROJECT_PATH = os.path.abspath(os.path.dirname(__file__))
 
-SECRET_KEY = '$geoon8_ymg-k)!9wl3wloq4&30w$rhc1*zv%h6m_&nza(uudi'
+PISTON_DISPLAY_ERRORS=True
+PISTON_IGNORE_DUPE_MODELS=True
+
+SECRET_KEY = ''
+
+MELISI_DATABASE = ''
+MELISI_REGISTRATIONS_OPEN = True
+MELISI_QUEUE_SERVICE = None
+MELISI_DATABASE = None
+
+SENDFILE=False
+
+mongoengine.connect(MELISI_DATABASE)
