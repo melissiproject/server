@@ -93,15 +93,9 @@ TEMPLATE_DIRS = (
 )
 
 INSTALLED_APPS = (
-    # 'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    # 'django.contrib.sites',
     'django.contrib.messages',
-    # Uncomment the next line to enable the admin:
-    # 'django.contrib.admin',
-    # Uncomment the next line to enable admin documentation:
-    # 'django.contrib.admindocs',
     'mlscommon'
 )
 
@@ -111,8 +105,10 @@ PISTON_IGNORE_DUPE_MODELS=True
 
 MELISI_REGISTRATIONS_OPEN = True
 MELISI_QUEUE_SERVICE = None
+MELISI_DATABASE = None
 
 SENDFILE=False
 
 APPEND_SLASH = True
+
 from local_settings import *
