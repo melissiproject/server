@@ -449,7 +449,11 @@ class DropletUpdateForm(forms.Form):
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = Droplet
-    fields = ('pk', 'name', 'owner', 'cell', 'created', 'updated', 'revisions', 'deleted')
+    fields = ('pk', 'name', 'created', 'updated', 'revisions', 'deleted', 'owner',
+              'cell')
+    # fields = ('pk', ('cell', ('name', 'pk', ('owner', ('username', 'pk')))), 'revisions')
+    # fields = ('revisions',)
+    depth = 2
 
     @add_server_timestamp
     @check_read_permission
@@ -885,7 +889,6 @@ class StatusHandler(BaseHandler):
             )
 
         shared_cells_roots = Cell.objects.filter(shared_with__user = request.user)
-        # new_shared_cells = Cell.objects.filter(roots__in = new_shared_cells_roots)
 
         for cell in shared_cells_roots:
             shared = filter(lambda x: x.user == request.user,
@@ -896,7 +899,6 @@ class StatusHandler(BaseHandler):
 
             if shared.created >= timestamp:
                 # this is a new share, force add everything
-                print "hi"
                 cells = Cell.objects.filter(roots__in = [cell])
                 map(lambda x: status_cells.append(x), cells)
                 map(lambda x: status_droplets.append(x),
