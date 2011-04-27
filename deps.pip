@@ -1,0 +1,10 @@
+Django==1.2.5
+Pygments==1.4
+distribute==0.6.10
+django-extensions==0.6
+httplib2==0.6.0
+oauth==1.0.1
+oauth2==1.5.165
+pymongo==1.9
+urwid==0.9.9.1
+wsgiref==0.1.2
