@@ -519,6 +519,7 @@ class CellShareUpdateForm(CellShareForm):
 
 class CellShareHandler(BaseHandler):
     model = Share
+    fields = ('user', 'mode', 'name', 'created')
     allowed_methods = ('GET', 'POST', 'DELETE')
     depth = 2
 
@@ -784,8 +785,8 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     def create(self, request):
         if getattr(settings, 'MELISI_REGISTRATIONS_OPEN', False):
             user = MelissiUser.create_user(request.form.cleaned_data['username'],
-                                           request.form.cleaned_data['password'],
-                                           request.form.cleaned_data['email']
+                                           request.form.cleaned_data['email'],
+                                           request.form.cleaned_data['password']
                                            )
             user.first_name = request.form.cleaned_data['first_name']
             user.last_name = request.form.cleaned_data['last_name']
@@ -818,8 +819,8 @@ class UserHandler(BaseHandler):
     def create(self, request):
         if request.user.is_staff or request.user.is_superuser:
             user = MelissiUser.create_user(request.form.cleaned_data['username'],
-                                           request.form.cleaned_data['password'],
-                                           request.form.cleaned_data['email']
+                                           request.form.cleaned_data['email'],
+                                           request.form.cleaned_data['password']
                                            )
             user.first_name = request.form.cleaned_data['first_name']
             user.last_name = request.form.cleaned_data['last_name']
