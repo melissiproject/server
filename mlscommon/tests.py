@@ -67,7 +67,7 @@ class AuthTestCase(TestCase):
         user['auth'] = self.auth(user['username'], user['password'])
 
         try:
-            u = MelissiUser.create_user(user['username'], user['password'], user['email'])
+            u = MelissiUser.create_user(user['username'], user['email'], user['password'])
             u.is_superuser = True
             u.is_staff = True
             u.save()
@@ -84,7 +84,7 @@ class AuthTestCase(TestCase):
         user['auth'] = self.auth(user['username'], user['password'])
 
         try:
-            MelissiUser.create_user(user['username'], user['password'], user['email'])
+            MelissiUser.create_user(user['username'], user['email'], user['password'])
         except OperationError:
             pass
 

@@ -10,8 +10,8 @@ from mongoengine.base import ValidationError as MongoValidationError
 
 class MelissiUser(User):
     @classmethod
-    def create_user(cls, username, password, email=None):
-        user = super(MelissiUser, cls).create_user(username, password, email)
+    def create_user(cls, username, email, password):
+        user = super(MelissiUser, cls).create_user(username, email, password)
         # create melissi cell
         cell = Cell(name='melissi', owner=user, roots=[])
         cell.save()
