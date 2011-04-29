@@ -200,7 +200,7 @@ class UserTest(AuthTestCase):
     @test_multiple_users
     def test_get_user(self):
         # Prepare
-        MelissiUser.create_user(self.username, self.password, self.email)
+        MelissiUser.create_user(self.username, self.email, self.password)
 
         dic = {
             'response_code': {'user': 401,
@@ -218,7 +218,7 @@ class UserTest(AuthTestCase):
     def test_update_user(self):
         # Prepare
         def setup():
-            MelissiUser.create_user(self.username, self.password, self.email)
+            MelissiUser.create_user(self.username, self.email, self.password)
 
         def teardown():
             User.objects(username=self.username).delete()
@@ -248,7 +248,7 @@ class UserTest(AuthTestCase):
     def test_delete_user(self):
         # Prepare
         def setup():
-            MelissiUser.create_user(self.username, self.password, self.email)
+            MelissiUser.create_user(self.username, self.email, self.password)
 
         def teardown():
             User.objects(username=self.username).delete()
@@ -1824,7 +1824,7 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            u2 = MelissiUser.create_user("sharetest", "123", "test@example.com")
+            u2 = MelissiUser.create_user("sharetest", "test@example.com", "123")
             c = Cell(name="c1", owner=u)
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
