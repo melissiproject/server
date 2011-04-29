@@ -1,5 +1,6 @@
 import mongoengine
 import os
+import settings
 
 PROJECT_PATH = os.path.abspath(os.path.dirname(__file__))
 
@@ -13,5 +14,8 @@ MELISSI_QUEUE_SERVICE = None
 MELISSI_DATABASE = None
 
 SENDFILE=False
+
+# uncomment to activate gunicorn
+# INSTALLED_APPS = settings.INSTALLED_APPS + ('gunicorn', )
 
 mongoengine.connect(MELISSI_DATABASE)
