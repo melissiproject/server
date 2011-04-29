@@ -783,7 +783,7 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     @add_server_timestamp
     @validate(UserCreateForm, ('POST',))
     def create(self, request):
-        if getattr(settings, 'MELISI_REGISTRATIONS_OPEN', False):
+        if getattr(settings, 'MELISSI_REGISTRATIONS_OPEN', False):
             user = MelissiUser.create_user(request.form.cleaned_data['username'],
                                            request.form.cleaned_data['email'],
                                            request.form.cleaned_data['password']
