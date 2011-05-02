@@ -623,36 +623,6 @@ class DropletTest(AuthTestCase):
         return dic
 
     @test_multiple_users
-    def test_create_duplicate_droplet(self):
-        def setup():
-            u = User.objects.get(username="foo")
-            ur = UserResource.objects.get(user=u)
-            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
-            c.save()
-            d = Droplet(name='drop', owner=u, cell=c)
-            d.save()
-            return { 'cell_id': c.pk }
-
-        dic = {
-            'setup': setup,
-            'teardown': self.teardown,
-            'method': 'post',
-            'url': '/api/droplet/',
-            'users': self.users,
-            'content': '%(cell_id)s',
-            'postdata': {'name':'drop',
-                         'cell':'%(cell_id)s'
-                         },
-            'response_code': {'user': 401,
-                              'admin': 401,
-                              'anonymous': 401,
-                              'owner': 400,
-                              }
-            }
-
-        return dic
-
-    @test_multiple_users
     def test_update_name_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
@@ -676,37 +646,6 @@ class DropletTest(AuthTestCase):
                               'admin': 401,
                               'anonymous': 401,
                               'owner': 200,
-                              }
-            }
-
-        return dic
-
-    @test_multiple_users
-    def test_denied_update_name_droplet(self):
-        """ Duplicate name """
-        def setup():
-            u = User.objects.get(username="foo")
-            ur = UserResource.objects.get(user=u)
-            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
-            c.save()
-            d = Droplet(name='drop', owner=u, cell=c)
-            d.save()
-            d2 = Droplet(name='newname', owner=u, cell=c)
-            d2.save()
-            return { 'droplet_id':d.pk }
-
-        dic = {
-            'setup': setup,
-            'teardown': self.teardown,
-            'method': 'put',
-            'url': '/api/droplet/%(droplet_id)s/',
-            'users': self.users,
-            'postdata': {'name':'newname',
-                         },
-            'response_code': {'user': 401,
-                              'admin': 401,
-                              'anonymous': 401,
-                              'owner': 400,
                               }
             }
 
@@ -847,7 +786,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put(content)
             d.revisions.append(r)
             d.save()
@@ -896,7 +835,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.new_file()
             r.content.write(content.read())
             r.content.close()
@@ -1042,7 +981,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put(content)
             d.revisions.append(r)
             d.save()
@@ -1095,7 +1034,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, content=content)
+            r = DropletRevision(resource=ur, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1143,7 +1082,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, patch=content)
+            r = DropletRevision(resource=ur, patch=content)
             d.revisions.append(r)
             d.revisions.append(r)
 
@@ -1193,7 +1132,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, content=content)
+            r = DropletRevision(resource=ur, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1240,7 +1179,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, patch=content)
+            r = DropletRevision(resource=ur, patch=content)
             d.revisions.append(r)
             d.revisions.append(r)
             d.save()
@@ -1293,7 +1232,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, content=content)
+            r = DropletRevision(resource=ur, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1350,7 +1289,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, content=content)
+            r = DropletRevision(resource=ur, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1409,7 +1348,7 @@ class DropletRevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = DropletRevision(user=u, content=content)
+            r = DropletRevision(resource=ur, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -2017,7 +1956,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2027,7 +1966,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2036,7 +1975,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()
@@ -2093,7 +2032,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2102,7 +2041,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2111,7 +2050,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()
@@ -2168,7 +2107,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2177,7 +2116,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2186,7 +2125,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = DropletRevision(user=u)
+            r = DropletRevision(resource=ur)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()

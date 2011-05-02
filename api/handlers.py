@@ -63,6 +63,7 @@ class MelissiResourceForm(forms.Form):
                 self.cleaned_data['resource'], created =\
                      UserResource.objects.get_or_create(user=self.user,
                                                         name=self.cleaned_data['resource'])
+
         return self.cleaned_data
 
 @decorator
@@ -324,6 +325,8 @@ class RevisionHandler(BaseHandler):
     @watchdog_notfound
     def create(self, request, droplet_id):
         """ TODO validate number """
+        droplet = Droplet.objects.get(pk=droplet_id)
+
         revision = DropletRevision()
         revision.resource = request.form.cleaned_data['resource']
         revision.content.put(request.form.cleaned_data['content'].file)
@@ -337,7 +340,6 @@ class RevisionHandler(BaseHandler):
                                  }
                                 )
 
-        droplet = Droplet.objects.get(pk=droplet_id)
         droplet.revisions.append(revision)
         droplet.save()
 
@@ -452,7 +454,7 @@ class RevisionPatchHandler(BaseHandler):
                               )
 
 class DropletCreateForm(MelissiResourceForm):
-    name = forms.CharField(max_length=500, min_length=1, required=True)
+    name = forms.CharField(max_length=500, min_length=1, required=False)
     cell = forms.CharField(max_length=500, required=True)
 
 class DropletUpdateForm(MelissiResourceForm):
@@ -503,9 +505,17 @@ class DropletHandler(BaseHandler):
     @validate(DropletUpdateForm, ('POST',))
     @watchdog_notfound
     def update(self, request, droplet_id):
-
         droplet = Droplet.objects.get(pk=droplet_id)
-        droplet.name = request.form.cleaned_data.get('name') or droplet.name
+        if request.form.cleaned_data.get('name'):
+            dr = DropletRevision(name=request.form.cleaned_data['name'],
+                                 resource=request.form.cleaned_data['resource']
+                                 )
+            if len(droplet.revisions):
+                dr.content=droplet.revisions[-1].content,
+                dr.patch=droplet.revisions[-1].patch,
+
+            droplet.revisions.append(dr)
+            droplet.name = request.form.cleaned_data['name']
         droplet.cell = request.form.cleaned_data.get('cell') or droplet.cell
         droplet.save()
 
