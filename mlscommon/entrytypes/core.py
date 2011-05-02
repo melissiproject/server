@@ -38,6 +38,16 @@ class UserResource(Document):
         self.updated = datetime.now()
         super(UserResource, self).save()
 
+    def __unicode__(self):
+        return "User: %s Resource: %s" % (self.user, self.name)
+
+    def __repr__(self):
+        # I don't want to prepend the model type before __unicode__
+        # e.g. I just want __unicode__() value and not <Cell - __unicode__()>
+        #
+        return self.__unicode__()
+
+
 class Share(EmbeddedDocument):
     user = ReferenceField(User)
     mode = StringField(required=True)
@@ -149,6 +159,7 @@ class Cell(Document):
         super(Cell, self).delete()
 
 class DropletRevision(EmbeddedDocument):
+    name = StringField(required=False)
     resource = ReferenceField(UserResource, required=True)
     created = DateTimeField(required=True, default=datetime.now)
     content = FileField(required=True)
@@ -181,20 +192,26 @@ class Droplet(Document):
         'indexes': ['revisions', 'cell']
         }
 
-    def validate(self):
-        if self.pk and Droplet.objects.filter(name = self.name,
-                                              cell = self.cell,
-                                              deleted = False,
-                                              pk__ne = self.pk
-                                              ).count():
-            raise MongoValidationError("Name not unique %s, cell: %s" %\
-                                       (self.name, self.cell))
-        elif not self.pk and Droplet.objects.filter(name = self.name,
-                                                    cell = self.cell,
-                                                    deleted = False,
-                                                    ).count():
-            raise MongoValidationError("Name not unique %s, cell: %s" %\
-                                       (self.name, self.cell))
+    # def validate(self):
+    #     """ Droplet can have zero revisions """
+    #     q = Droplet.objects.get(name = self.name,
+    #                             cell = self.cell,
+    #                             deleted = False,
+    #                             )
+    #     if q.count() and (self.pk and
+    #     if self.pk and Droplet.objects.filter(name = self.name,
+    #                                           cell = self.cell,
+    #                                           deleted = False,
+    #                                           pk__ne = self.pk
+    #                                           ).count():
+    #         raise MongoValidationError("Name not unique %s, cell: %s" %\
+    #                                    (self.name, self.cell))
+    #     elif not self.pk and Droplet.objects.filter(name = self.name,
+    #                                                 cell = self.cell,
+    #                                                 deleted = False,
+    #                                                 ).count():
+    #         raise MongoValidationError("Name not unique %s, cell: %s" %\
+    #                                    (self.name, self.cell))
 
     def set_deleted(self):
         # set deleted all related droplets
