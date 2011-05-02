@@ -4,7 +4,7 @@ from django import forms
 from mongoengine.queryset import DoesNotExist
 from mongoengine.base import ValidationError as MongoValidationError
 from django.db import IntegrityError, transaction
-from mongoengine.django.auth import User
+from mongoengine.django.auth import User, AnonymousUser
 from mongoengine import Q
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
@@ -16,7 +16,8 @@ import re
 
 from piston.decorator import decorator
 
-from mlscommon.entrytypes import Droplet, Cell, Revision, Share, MelissiUser
+from mlscommon.entrytypes import Droplet, Cell, Revision,\
+     Share, MelissiUser, UserResource, CellRevision
 from mlscommon.common import calculate_md5, patch_file, sendfile, myFileField
 
 from exceptions import APIBadRequest, APIForbidden, APINotFound
@@ -31,7 +32,9 @@ def validate(v_form, operations):
     # request.form
     @decorator
     def wrap(function, self, request, *args, **kwargs):
-        form = v_form(*tuple( getattr(request, operation) for operation in operations))
+        form = v_form(*tuple( getattr(request, operation) for operation in operations),
+                      **{'request':request}
+                      )
 
         if form.is_valid():
             request.form = form
@@ -40,6 +43,27 @@ def validate(v_form, operations):
             raise FormValidationError(form)
 
     return wrap
+
+class MelissiResourceForm(forms.Form):
+    resource = forms.CharField(max_length=500, min_length=1, required=False)
+
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('request')
+        self.user = self.user.user
+
+        super(MelissiResourceForm, self).__init__(*args, **kwargs)
+
+    def clean(self):
+        super(MelissiResourceForm, self).clean()
+        if not isinstance(self.user, AnonymousUser):
+            if self.cleaned_data['resource'] == '':
+                self.cleaned_data['resource'] =\
+                     UserResource.objects.filter(user=self.user)[0]
+            else:
+                self.cleaned_data['resource'], created =\
+                     UserResource.objects.get_or_create(user=self.user,
+                                                        name=self.cleaned_data['resource'])
+        return self.cleaned_data
 
 @decorator
 def add_server_timestamp(function, self, request, *args, **kwargs):
@@ -242,7 +266,7 @@ def _recursive_update_shares(cell, request_user):
 
     return number_of_shares_created
 
-class RevisionCreateForm(forms.Form):
+class RevisionCreateForm(MelissiResourceForm):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(0)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     # caution we use our home breweded FileField form item
@@ -261,7 +285,7 @@ class RevisionCreateForm(forms.Form):
 
         return self.cleaned_data
 
-class RevisionUpdateForm(forms.Form):
+class RevisionUpdateForm(MelissiResourceForm):
     number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     content = forms.FileField(required=True)
@@ -427,11 +451,11 @@ class RevisionPatchHandler(BaseHandler):
                                revision_id + 1}
                               )
 
-class DropletCreateForm(forms.Form):
+class DropletCreateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=True)
     cell = forms.CharField(max_length=500, required=True)
 
-class DropletUpdateForm(forms.Form):
+class DropletUpdateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=False)
     cell = forms.CharField(max_length=500, required=False)
 
@@ -495,7 +519,7 @@ class DropletHandler(BaseHandler):
 
         return rc.DELETED
 
-class CellShareForm(forms.Form):
+class CellShareForm(MelissiResourceForm):
     def clean(self):
         if self.data.get('mode') and self.data['mode'] not in ['wara', 'wnra']:
             raise ValidationError("invalid share mode")
@@ -608,11 +632,11 @@ class CellShareHandler(BaseHandler):
 
         return rc.DELETED
 
-class CellCreateForm(forms.Form):
+class CellCreateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=True)
     parent = forms.CharField(max_length=500, required=False)
 
-class CellUpdateForm(forms.Form):
+class CellUpdateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=False)
     parent = forms.CharField(max_length=500, required=False)
 
@@ -644,12 +668,12 @@ class CellHandler(BaseHandler):
         else:
             owner = request.user
             roots = []
-
         c = Cell(owner = owner,
-                 name = request.form.cleaned_data['name'],
-                 roots = roots
+                 roots = roots,
+                 revisions = [CellRevision(resource=request.form.cleaned_data['resource'],
+                                           name = request.form.cleaned_data['name']
+                                           )]
                  )
-
         c.save()
         return c
 
@@ -690,7 +714,10 @@ class CellHandler(BaseHandler):
         else:
             # update name
             if request.form.cleaned_data.get('name'):
-                cell.name = request.form.cleaned_data.get('name')
+                cell.revisions.append(CellRevision(name=request.form.cleaned_data.get('name'),
+                                                   resource=request.form.cleaned_data.get('resource')
+                                                   )
+                                      )
                 cell.save()
 
             # update parents
@@ -739,7 +766,7 @@ class CellHandler(BaseHandler):
 
         return rc.DELETED
 
-class UserCreateForm(forms.Form):
+class UserCreateForm(MelissiResourceForm):
     username = forms.CharField(max_length=30, min_length=3)
     password = forms.CharField(max_length=30, min_length=3)
     password2 = forms.CharField(max_length=30, min_length=3)
@@ -760,7 +787,7 @@ class UserCreateForm(forms.Form):
 
         return self.cleaned_data
 
-class UserUpdateForm(forms.Form):
+class UserUpdateForm(MelissiResourceForm):
     username = forms.CharField(max_length=30, min_length=3, required=False)
     password = forms.CharField(max_length=30, min_length=3, required=False)
     first_name = forms.CharField(max_length=30, required=False)

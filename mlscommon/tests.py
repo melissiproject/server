@@ -302,7 +302,8 @@ class CellTest(AuthTestCase):
         # Prepare
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -329,44 +330,11 @@ class CellTest(AuthTestCase):
 
 
     @test_multiple_users
-    def test_create_duplicate_child_cell(self):
-        def setup():
-            # Prepare
-            u = User.objects.get(username="foo")
-            # create root cell
-            c1 = Cell(name="foo", owner=u)
-            c1.save()
-            # create child cell
-            c2 = Cell(name='test', owner=u, roots=[c1])
-            c2.save()
-
-            return { 'cell_id': c1.pk }
-
-        dic = {
-            'setup':setup,
-            'teardown':self.teardown,
-            'response_code': {'user': 401,
-                              'admin': 401,
-                              'anonymous':401,
-                              'owner':400,
-                              },
-            'postdata': {
-                'name':'test',
-                'parent': "%(cell_id)s"
-                },
-            'content': 'test',
-            'method':'post',
-            'url': '/api/cell/',
-            'users': self.users
-            }
-
-        return dic
-
-    @test_multiple_users
     def test_read_cell(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -390,7 +358,8 @@ class CellTest(AuthTestCase):
     def test_update_name_cell(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -415,9 +384,10 @@ class CellTest(AuthTestCase):
     def test_denied_update_name_cell(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
-            c1 = Cell(name="bar", owner=u)
+            c1 = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c1.save()
 
             return { 'cell_id': c.pk }
@@ -442,16 +412,17 @@ class CellTest(AuthTestCase):
     def test_move_cell(self):
         def setup():
             u = User.objects.get(username="foo")
-            c1 = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c1.save()
 
-            c2 = Cell(name="bar", owner=u, roots=[c1])
+            c2 = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u, roots=[c1])
             c2.save()
 
-            c3 = Cell(name="new-root", owner=u)
+            c3 = Cell(revisions=[CellRevision(name="new-root", resource=ur)], owner=u)
             c3.save()
 
-            c4 = Cell(name="child-bar", owner=u, roots=[c2,c1])
+            c4 = Cell(revisions=[CellRevision(name="child-bar", resource=ur)], owner=u, roots=[c2,c1])
             c4.save()
 
             return { 'c2': c2.pk, 'c3': c3.pk }
@@ -489,16 +460,18 @@ class CellTest(AuthTestCase):
         def setup():
             u1 = User.objects.get(username="foo")
             u2 = User.objects.get(username="melisi")
-            c1 = Cell(name="foo", owner=u1)
+            ur1 = UserResource.objects.get(user=u1)
+            ur2 = UserResource.objects.get(user=u2)
+            c1 = Cell(revisions=[CellRevision(name="foo", resource=ur1)], owner=u1)
             c1.save()
 
-            c2 = Cell(name="bar", owner=u1, roots=[c1])
+            c2 = Cell(revisions=[CellRevision(name="bar", resource=ur1)], owner=u1, roots=[c1])
             c2.save()
 
-            c3 = Cell(name="new-root", owner=u2)
+            c3 = Cell(revisions=[CellRevision(name="bar", resource=ur2)], owner=u2)
             c3.save()
 
-            c4 = Cell(name="child-bar", owner=u1, roots=[c2,c1])
+            c4 = Cell(revisions=[CellRevision(name="child-bar", resource=ur1)], owner=u1, roots=[c2,c1])
             c4.save()
 
             return { 'c2': c2.pk, 'c3': c3.pk }
@@ -526,11 +499,12 @@ class CellTest(AuthTestCase):
 
         def setup():
             u = User.objects.get(username="foo")
-            c1 = Cell(name="root", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="root", resource=ur)], owner=u)
             c1.save()
-            c2 = Cell(name="child1", owner=u, roots=[c1])
+            c2 = Cell(revisions=[CellRevision(name="child1", resource=ur)], owner=u, roots=[c1])
             c2.save()
-            c3 = Cell(name="child2", owner=u, roots=[c2,c1])
+            c3 = Cell(revisions=[CellRevision(name="child2", resource=ur)], owner=u, roots=[c2,c1])
             c3.save()
             d1 = Droplet(name="drop1", owner=u, cell=c1)
             d1.save()
@@ -563,7 +537,8 @@ class CellTest(AuthTestCase):
         # Prepare
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -595,7 +570,8 @@ class DropletTest(AuthTestCase):
     def test_read_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="foo", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c.save()
             d = Droplet(name="drop", owner=u, cell=c)
             d.save()
@@ -621,7 +597,8 @@ class DropletTest(AuthTestCase):
     def test_create_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -649,7 +626,8 @@ class DropletTest(AuthTestCase):
     def test_create_duplicate_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -678,7 +656,8 @@ class DropletTest(AuthTestCase):
     def test_update_name_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -707,7 +686,8 @@ class DropletTest(AuthTestCase):
         """ Duplicate name """
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -737,7 +717,8 @@ class DropletTest(AuthTestCase):
         """ delete droplet """
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -769,9 +750,11 @@ class DropletTest(AuthTestCase):
     def test_move_droplet(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
-            c1 = Cell(name="foo", owner=u)
+
+            c1 = Cell(revisions=[CellRevision(name="foo", resource=ur)], owner=u)
             c1.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -800,9 +783,12 @@ class DropletTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="melisi")
-            c = Cell(name="bar", owner=u)
+            ur = UserResource.objects.get(user=u)
+            ur1 = UserResource.objects.get(user=u1)
+
+            c = Cell(revisions=[CellRevision(name="bar", resource=ur)], owner=u)
             c.save()
-            c1 = Cell(name="foo", owner=u1)
+            c1 = Cell(revisions=[CellRevision(name="foo", resource=ur1)], owner=u1)
             c1.save()
             d = Droplet(name='drop', owner=u, cell=c)
             d.save()
@@ -852,7 +838,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -900,7 +887,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -950,7 +938,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -997,7 +986,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1043,7 +1033,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1095,7 +1086,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1142,7 +1134,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1191,7 +1184,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1237,7 +1231,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1289,7 +1284,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1345,7 +1341,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1403,7 +1400,8 @@ class RevisionTest(AuthTestCase):
 
             u = User.objects.get(username="foo")
             # create cell
-            c1 = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c1 = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c1.save()
 
             # create droplet
@@ -1453,7 +1451,8 @@ class ShareTest(AuthTestCase):
     def test_share_cell(self):
         def setup():
             u = User.objects.get(username="foo")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c.save()
 
             return { 'cell_id': c.pk }
@@ -1483,12 +1482,14 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user=u1, mode='wara')
             c.shared_with.append(s)
             c.save()
 
-            c1 = Cell(name="c2", owner=u, roots= [c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
 
             return { 'cell_id': c1.pk }
@@ -1518,7 +1519,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
@@ -1547,12 +1550,14 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
 
-            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
 
             return { 'cell_id': c1.pk }
@@ -1579,12 +1584,13 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
 
-            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
 
             d = Droplet(owner=u, cell=c1, name="lala")
@@ -1614,7 +1620,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara', name=c.name )
             c.shared_with.append(s)
             c.save()
@@ -1643,16 +1651,18 @@ class ShareTest(AuthTestCase):
     def test_write_shared_cell_move_owner(self):
         def setup():
             u = User.objects.get(username="foo")
-            mc = Cell(name="melissi u", owner=u)
+            ur = UserResource.objects.get(user=u)
+            mc = Cell(revisions=[CellRevision(name="melissi u", resource=ur)], owner=u)
             mc.save()
-            mc_2 = Cell(name="subfolder u", owner=u)
+            mc_2 = Cell(revisions=[CellRevision(name="subfolder u", resource=ur)], owner=u)
             mc_2.save()
 
             u1 = User.objects.get(username="bar")
-            mc1 = Cell(name="melissi u1", owner=u1)
+            ur1 = UserResource.objects.get(user=u1)
+            mc1 = Cell(revisions=[CellRevision(name="melissi u1", resource=ur1)], owner=u1)
             mc1.save()
 
-            c = Cell(name="c1", owner=u, roots=[mc])
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             s = Share(user = u1, mode='wara', name=c.name, roots=[mc1] )
             c.shared_with.append(s)
             c.save()
@@ -1680,16 +1690,18 @@ class ShareTest(AuthTestCase):
     def test_write_shared_cell_move_partner(self):
         def setup():
             u = User.objects.get(username="foo")
-            mc = Cell(name="melissi u", owner=u)
+            ur = UserResource.objects.get(user=u)
+            mc = Cell(revisions=[CellRevision(name="melissi u", resource=ur)], owner=u)
             mc.save()
 
             u1 = User.objects.get(username="bar")
-            mc1 = Cell(name="melissi u1", owner=u1)
+            ur1 = UserResource.objects.get(user=u1)
+            mc1 = Cell(revisions=[CellRevision(name="melissi u1", resource=ur1)], owner=u1)
             mc1.save()
-            mc1_2 = Cell(name="subfolder u1", owner=u1)
+            mc1_2 = Cell(revisions=[CellRevision(name="subfolder u1", resource=ur1)], owner=u1)
             mc1_2.save()
 
-            c = Cell(name="c1", owner=u, roots=[mc])
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             s = Share(user = u1, mode='wara', name=c.name, roots=[mc1] )
             c.shared_with.append(s)
             c.save()
@@ -1718,7 +1730,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
@@ -1753,7 +1767,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
@@ -1787,7 +1803,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
@@ -1825,7 +1843,10 @@ class ShareTest(AuthTestCase):
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
             u2 = MelissiUser.create_user("sharetest", "test@example.com", "123")
-            c = Cell(name="c1", owner=u)
+
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             s1 = Share(user = u2, mode='wara')
@@ -1865,7 +1886,9 @@ class ShareTest(AuthTestCase):
         def setup():
             u = User.objects.get(username="foo")
             u1 = User.objects.get(username="bar")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
+
             s = Share(user = u1, mode='wara')
             c.shared_with.append(s)
             c.save()
@@ -1907,10 +1930,13 @@ class ShareTest(AuthTestCase):
             user_bar_root = Cell.objects.get(owner=user_bar)
             user_foo_root = Cell.objects.get(owner=user_foo)
 
-            c0 = Cell(name='0', owner=user_foo, roots=[user_foo_root])
-            c0.save()
+            ur_foo = UserResource.objects.get(user=user_foo)
+            ur_bar = UserResource.objects.get(user=user_bar)
 
-            c1 = Cell(name='1', owner=user_bar, roots=[user_bar_root])
+            c0 = Cell(revisions=[CellRevision(name="0", resource=ur_foo)], owner=user_foo, roots=[user_foo_root])
+
+            c0.save()
+            c1 = Cell(revisions=[CellRevision(name="1", resource=ur_bar)], owner=user_bar, roots=[user_bar_root])
             c1.shared_with.append(Share(name='1',
                                         user=user_foo,
                                         mode='wara',
@@ -1972,17 +1998,18 @@ class StatusTest(AuthTestCase):
             a_day_ago = datetime.now() - timedelta(days=1)
 
             u = User.objects.get(username="foo")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c.save()
             # force updated timestamp
             Cell.objects(pk=c.pk).update(set__updated=now)
 
-            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
             # force updated timestamp
             Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
 
-            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2 = Cell(revisions=[CellRevision(name="c3", resource=ur)], owner=u, roots=[c])
             c2.save()
             # force updated timestamp
             Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
@@ -2047,17 +2074,18 @@ class StatusTest(AuthTestCase):
             a_day_ago = datetime.now() - timedelta(hours=23)
 
             u = User.objects.get(username="foo")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c.save()
             # force updated timestamp
             Cell.objects(pk=c.pk).update(set__updated=a_month_ago)
 
-            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
             # force updated timestamp
             Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
 
-            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2 = Cell(revisions=[CellRevision(name="c3", resource=ur)], owner=u, roots=[c])
             c2.save()
             # force updated timestamp
             Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
@@ -2121,17 +2149,18 @@ class StatusTest(AuthTestCase):
             a_day_ago = datetime.now() - timedelta(hours=23)
 
             u = User.objects.get(username="foo")
-            c = Cell(name="c1", owner=u)
+            ur = UserResource.objects.get(user=u)
+            c = Cell(revisions=[CellRevision(name="c1", resource=ur)], owner=u)
             c.save()
             # force updated timestamp
             Cell.objects(pk=c.pk).update(set__updated=a_month_ago)
 
-            c1 = Cell(name="c2", owner=u, roots=[c])
+            c1 = Cell(revisions=[CellRevision(name="c2", resource=ur)], owner=u, roots=[c])
             c1.save()
             # force updated timestamp
             Cell.objects(pk=c1.pk).update(set__updated=a_month_ago)
 
-            c2 = Cell(name="c3", owner=u, roots=[c])
+            c2 = Cell(revisions=[CellRevision(name="c3", resource=ur)], owner=u, roots=[c])
             c2.save()
             # force updated timestamp
             Cell.objects(pk=c2.pk).update(set__updated=a_day_ago)
