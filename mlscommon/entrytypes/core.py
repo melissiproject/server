@@ -18,6 +18,16 @@ class MelissiUser(User):
 
         return user
 
+class UserResource(Document):
+    name = StringField(required=True)
+    user = ReferenceField(User, required=True)
+    created = DateTimeField(required=True, default=datetime.now)
+    updated = DateTimeField(required=True)
+
+    def save(self):
+        self.updated = datetime.now()
+        super(UserResource, self).save()
+
 class Share(EmbeddedDocument):
     user = ReferenceField(User)
     mode = StringField(required=True)
