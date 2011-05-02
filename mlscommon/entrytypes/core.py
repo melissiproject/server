@@ -99,28 +99,6 @@ class Cell(Document):
                                                          shared_with__not__size = 0).count():
             raise MongoValidationError("Multiple shares in the same tree")
 
-        # # ensure that name and roots are unique
-        # if len(self.roots):
-        #     if self.pk and Cell.objects.filter(name = self.name,
-        #                                        roots__size = len(self.roots),
-        #                                        roots__all = self.roots,
-        #                                        pk__ne = self.pk,
-        #                                        deleted = False,
-        #                                        ).count():
-        #         raise MongoValidationError("Name not unique %s, cell: %s" %\
-        #                                    (self.name, self.roots[0] if len(self.roots) else 'root'))
-
-        #     elif not self.pk and Cell.objects.filter(name = self.name,
-        #                                              roots__size = len(self.roots),
-        #                                              roots__all = self.roots,
-        #                                              deleted = False,
-        #                                              ).count():
-        #         raise MongoValidationError("Name not unique %s, cell: %s" %\
-        #                                    (self.name, self.roots[0] if len(self.roots) else 'root'))
-
-        # or if roots = [] ensure that name and owner are unique
-        # else:
-
         # if roots = [] ensure that name and owner are unique
         # TODO optimize query
         q = Cell.objects.filter(owner = self.owner,
@@ -134,6 +112,7 @@ class Cell(Document):
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
+
         self.updated = self.revisions[-1].created
         self.name = self.revisions[-1].name
         super(Cell, self).save()
