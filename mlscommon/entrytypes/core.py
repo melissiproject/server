@@ -10,10 +10,20 @@ from mongoengine.base import ValidationError as MongoValidationError
 
 class MelissiUser(User):
     @classmethod
-    def create_user(cls, username, email, password):
+    def create_user(cls, username, email, password, resource=None):
         user = super(MelissiUser, cls).create_user(username, email, password)
+        # create (default) user resource
+        if not resource:
+            resource = 'default'
+        user_resource = UserResource(name=resource, user=user)
+        user_resource.save()
+
         # create melissi cell
-        cell = Cell(name='melissi', owner=user, roots=[])
+        cell = Cell(owner=user,
+                    roots=[],
+                    revisions=[CellRevision(name='melissi', resource=user_resource)]
+                    )
+
         cell.save()
 
         return user
@@ -38,20 +48,24 @@ class Share(EmbeddedDocument):
     def __unicode__(self):
         return "%s - %s" % (self.user, self.mode)
 
-class Cell(Document):
-    name = StringField(required=True)
+class CellRevision(EmbeddedDocument):
+    resource = ReferenceField(UserResource, required=True)
     created = DateTimeField(required=True, default=datetime.now)
-    updated = DateTimeField(required=True, default=datetime.now)
+    name = StringField(required=True)
+
+class Cell(Document):
     owner = ReferenceField(User, required=True)
     shared_with = ListField(EmbeddedDocumentField(Share))
     roots = ListField(ReferenceField("Cell"))
     deleted = BooleanField(default=False, required=True)
+    revisions = ListField(EmbeddedDocumentField(CellRevision))
+    name = StringField(required=True)
+    created = DateTimeField(required=True, default=datetime.now)
+    updated = DateTimeField(required=True)
 
     # nah not pythonic
     meta = {
         'indexes': ('shared_with', 'roots'),
-        'local_fields': (name, owner),
-        'virtual_fields': tuple(),
         }
 
     def __unicode__(self):
@@ -64,6 +78,10 @@ class Cell(Document):
         return self.__unicode__()
 
     def validate(self):
+        # ensure that cell has at least one revisions
+        if len(self.revisions) == 0:
+            raise MongoValidationError("Cell must have at least one revision")
+
         # ensure that shared_with does not contain the same user twice
 
         # ensure that shared_with has values only for one cell in a tree
@@ -71,48 +89,43 @@ class Cell(Document):
                                                          shared_with__not__size = 0).count():
             raise MongoValidationError("Multiple shares in the same tree")
 
-        # ensure that name and roots are unique
-        if len(self.roots):
-            if self.pk and Cell.objects.filter(name = self.name,
-                                               roots__size = len(self.roots),
-                                               roots__all = self.roots,
-                                               pk__ne = self.pk,
-                                               deleted = False,
-                                               ).count():
-                raise MongoValidationError("Name not unique %s, cell: %s" %\
-                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
+        # # ensure that name and roots are unique
+        # if len(self.roots):
+        #     if self.pk and Cell.objects.filter(name = self.name,
+        #                                        roots__size = len(self.roots),
+        #                                        roots__all = self.roots,
+        #                                        pk__ne = self.pk,
+        #                                        deleted = False,
+        #                                        ).count():
+        #         raise MongoValidationError("Name not unique %s, cell: %s" %\
+        #                                    (self.name, self.roots[0] if len(self.roots) else 'root'))
 
-            elif not self.pk and Cell.objects.filter(name = self.name,
-                                                     roots__size = len(self.roots),
-                                                     roots__all = self.roots,
-                                                     deleted = False,
-                                                     ).count():
-                raise MongoValidationError("Name not unique %s, cell: %s" %\
-                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
+        #     elif not self.pk and Cell.objects.filter(name = self.name,
+        #                                              roots__size = len(self.roots),
+        #                                              roots__all = self.roots,
+        #                                              deleted = False,
+        #                                              ).count():
+        #         raise MongoValidationError("Name not unique %s, cell: %s" %\
+        #                                    (self.name, self.roots[0] if len(self.roots) else 'root'))
 
         # or if roots = [] ensure that name and owner are unique
-        else:
-            if self.pk and Cell.objects.filter(name = self.name,
-                                               owner = self.owner,
-                                               roots__size = 0,
-                                               pk__ne = self.pk,
-                                               deleted = False,
-                                               ).count():
+        # else:
+
+        # if roots = [] ensure that name and owner are unique
+        # TODO optimize query
+        q = Cell.objects.filter(owner = self.owner,
+                                roots__size = 0,
+                                deleted = False,
+                                )
+        for c in q:
+            if c and c.name == self.name and ( self.pk and self.pk != c.pk ):
                 raise MongoValidationError("Name not unique %s, cell: %s" %\
                                            (self.name, self.roots[0] if len(self.roots) else 'root'))
-
-            elif not self.pk and Cell.objects.filter(name = self.name,
-                                                     owner = self.owner,
-                                                     roots__size = 0,
-                                                     deleted = False,
-                                                     ).count():
-                raise MongoValidationError("Name not unique %s, cell: %s" %\
-                                           (self.name, self.roots[0] if len(self.roots) else 'root'))
-
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
-        self.updated = datetime.now()
+        self.updated = self.revisions[-1].created
+        self.name = self.revisions[-1].name
         super(Cell, self).save()
 
     def set_deleted(self):
