@@ -148,8 +148,8 @@ class Cell(Document):
 
         super(Cell, self).delete()
 
-class Revision(EmbeddedDocument):
-    user = ReferenceField(User)
+class DropletRevision(EmbeddedDocument):
+    resource = ReferenceField(UserResource, required=True)
     created = DateTimeField(required=True, default=datetime.now)
     content = FileField(required=True)
     patch = FileField(required=False)
@@ -174,7 +174,7 @@ class Droplet(Document):
     created = DateTimeField(required=True, default=datetime.now)
     updated = DateTimeField(required=True, default=datetime.now)
     cell = ReferenceField(Cell, required=True)
-    revisions = ListField(EmbeddedDocumentField(Revision))
+    revisions = ListField(EmbeddedDocumentField(DropletRevision))
     deleted = BooleanField(default=False, required=True)
 
     meta = {

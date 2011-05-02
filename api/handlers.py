@@ -16,7 +16,7 @@ import re
 
 from piston.decorator import decorator
 
-from mlscommon.entrytypes import Droplet, Cell, Revision,\
+from mlscommon.entrytypes import Droplet, Cell, DropletRevision,\
      Share, MelissiUser, UserResource, CellRevision
 from mlscommon.common import calculate_md5, patch_file, sendfile, myFileField
 
@@ -296,7 +296,7 @@ class RevisionUpdateForm(MelissiResourceForm):
 class RevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     fields = ('user', 'created', 'content_md5', 'patch_md5')
-    model = Revision
+    model = DropletRevision
 
     @add_server_timestamp
     @check_read_permission
@@ -324,8 +324,8 @@ class RevisionHandler(BaseHandler):
     @watchdog_notfound
     def create(self, request, droplet_id):
         """ TODO validate number """
-        revision = Revision()
-        revision.user = request.user
+        revision = DropletRevision()
+        revision.resource = request.form.cleaned_data['resource']
         revision.content.put(request.form.cleaned_data['content'].file)
         revision.content.seek(0)
 
@@ -357,8 +357,8 @@ class RevisionHandler(BaseHandler):
                                request.form.cleaned_data['number'] - 1
                                })
 
-        revision = Revision()
-        revision.user = request.user
+        revision = DropletRevision()
+        revision.resource = request.form.cleaned_data['resource']
 
         if request.form.cleaned_data['patch'] == 'True':
             revision.content.put(patch_file(previous_revision.content,
