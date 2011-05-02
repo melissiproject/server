@@ -812,7 +812,7 @@ class DropletTest(AuthTestCase):
 
         return dic
 
-class RevisionTest(AuthTestCase):
+class DropletRevisionTest(AuthTestCase):
     def setUp(self):
         self.users = {
             'user' : self.create_user(),
@@ -847,7 +847,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put(content)
             d.revisions.append(r)
             d.save()
@@ -896,7 +896,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.new_file()
             r.content.write(content.read())
             r.content.close()
@@ -1042,7 +1042,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put(content)
             d.revisions.append(r)
             d.save()
@@ -1095,7 +1095,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, content=content)
+            r = DropletRevision(user=u, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1143,7 +1143,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, patch=content)
+            r = DropletRevision(user=u, patch=content)
             d.revisions.append(r)
             d.revisions.append(r)
 
@@ -1193,7 +1193,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, content=content)
+            r = DropletRevision(user=u, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1240,7 +1240,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, patch=content)
+            r = DropletRevision(user=u, patch=content)
             d.revisions.append(r)
             d.revisions.append(r)
             d.save()
@@ -1293,7 +1293,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, content=content)
+            r = DropletRevision(user=u, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1350,7 +1350,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, content=content)
+            r = DropletRevision(user=u, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -1409,7 +1409,7 @@ class RevisionTest(AuthTestCase):
             d.save()
 
             # create revision
-            r = Revision(user=u, content=content)
+            r = DropletRevision(user=u, content=content)
             d.revisions.append(r)
             d.save()
 
@@ -2017,7 +2017,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2027,7 +2027,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2036,7 +2036,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()
@@ -2093,7 +2093,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2102,7 +2102,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2111,7 +2111,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()
@@ -2168,7 +2168,7 @@ class StatusTest(AuthTestCase):
 
             d = Droplet(name="d1", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d.revisions.append(r)
             d.save()
@@ -2177,7 +2177,7 @@ class StatusTest(AuthTestCase):
 
             d1 = Droplet(name="d2", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d1.revisions.append(r)
             d1.save()
@@ -2186,7 +2186,7 @@ class StatusTest(AuthTestCase):
 
             d2 = Droplet(name="d3", owner=u, cell=c)
             # create revision
-            r = Revision(user=u)
+            r = DropletRevision(user=u)
             r.content.put("")
             d2.revisions.append(r)
             d2.save()
