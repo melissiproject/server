@@ -296,7 +296,7 @@ class RevisionUpdateForm(MelissiResourceForm):
 
 class RevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('user', 'created', 'content_md5', 'patch_md5')
+    fields = (('resource', ('name', 'user')), 'created', 'name', 'content_md5', 'patch_md5')
     model = DropletRevision
 
     @add_server_timestamp
@@ -324,13 +324,13 @@ class RevisionHandler(BaseHandler):
     @validate(RevisionCreateForm, ('POST', 'FILES'))
     @watchdog_notfound
     def create(self, request, droplet_id):
-        """ TODO validate number """
         droplet = Droplet.objects.get(pk=droplet_id)
 
         revision = DropletRevision()
         revision.resource = request.form.cleaned_data['resource']
         revision.content.put(request.form.cleaned_data['content'].file)
         revision.content.seek(0)
+        revision.name = droplet.name
 
         # verify integrity
         if revision.content.md5 != request.form.cleaned_data['md5']:
@@ -340,11 +340,22 @@ class RevisionHandler(BaseHandler):
                                  }
                                 )
 
+        if request.form.cleaned_data['number'] < len(droplet.revisions):
+            # revision conflict, create new droplet
+            new_droplet = Droplet(name=droplet.name,
+                                  owner=droplet.owner,
+                                  created=droplet.created,
+                                  updated=droplet.updated,
+                                  cell=droplet.cell,
+                                  revisions=droplet.revisions[:request.form.cleaned_data['number']],
+                                  deleted=droplet.deleted)
+            droplet = new_droplet
+
         droplet.revisions.append(revision)
         droplet.save()
 
-        return {'revision': revision, 'number': len(droplet.revisions)}
-
+        # TODO we cannot just return droplet :(
+        return {'pk':droplet.pk, 'name':droplet.name, 'revisions': droplet.revisions }
 
     @add_server_timestamp
     @check_write_permission
@@ -361,6 +372,7 @@ class RevisionHandler(BaseHandler):
 
         revision = DropletRevision()
         revision.resource = request.form.cleaned_data['resource']
+        revision.name = droplet.name
 
         if request.form.cleaned_data['patch'] == 'True':
             revision.content.put(patch_file(previous_revision.content,
@@ -381,10 +393,23 @@ class RevisionHandler(BaseHandler):
                                  }
                                 )
 
+        if request.form.cleaned_data['number'] < len(droplet.revisions):
+            # revision conflict, create new droplet
+            new_droplet = Droplet(name=droplet.name,
+                                  owner=droplet.owner,
+                                  created=droplet.created,
+                                  updated=droplet.updated,
+                                  cell=droplet.cell,
+                                  revisions=droplet.revisions[:request.form.cleaned_data['number']],
+                                  deleted=droplet.deleted)
+            droplet = new_droplet
+
+
         droplet.revisions.append(revision)
         droplet.save()
 
-        return {'revision': revision, 'number': len(droplet.revisions)}
+        # TODO we cannot just return droplet :(
+        return {'pk':droplet.pk, 'name':droplet.name, 'revisions': droplet.revisions }
 
     @check_write_permission
     @watchdog_notfound
@@ -460,6 +485,7 @@ class DropletCreateForm(MelissiResourceForm):
 class DropletUpdateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=False)
     cell = forms.CharField(max_length=500, required=False)
+    number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
 
     def clean(self):
         super(DropletUpdateForm, self).clean()
@@ -475,11 +501,11 @@ class DropletUpdateForm(MelissiResourceForm):
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = Droplet
-    fields = ('pk', 'name', 'created', 'updated', 'revisions', 'deleted', 'owner',
-              'cell')
+    fields = ('pk', 'name', 'created', 'updated', 'deleted', 'owner',
+              'revisions', 'cell')
     # fields = ('pk', ('cell', ('name', 'pk', ('owner', ('username', 'pk')))), 'revisions')
     # fields = ('revisions',)
-    depth = 2
+    depth = 3
 
     @add_server_timestamp
     @check_read_permission
@@ -507,12 +533,17 @@ class DropletHandler(BaseHandler):
     def update(self, request, droplet_id):
         droplet = Droplet.objects.get(pk=droplet_id)
         if request.form.cleaned_data.get('name'):
+            if request.form.cleaned_data['number'] < len(droplet.revisions):
+                # name conflict, do nothing?
+                # latest change wins
+                pass
+
             dr = DropletRevision(name=request.form.cleaned_data['name'],
                                  resource=request.form.cleaned_data['resource']
                                  )
             if len(droplet.revisions):
-                dr.content=droplet.revisions[-1].content,
-                dr.patch=droplet.revisions[-1].patch,
+                dr.content=droplet.revisions[-1].content
+                dr.patch=droplet.revisions[-1].patch
 
             droplet.revisions.append(dr)
             droplet.name = request.form.cleaned_data['name']
@@ -642,6 +673,11 @@ class CellShareHandler(BaseHandler):
 
         return rc.DELETED
 
+class CellRevisionsHandler(BaseHandler):
+    model = CellRevision
+    fields = ('name', ('resource', ('name', ('user', ('username', 'pk')))), 'created')
+    depth = 3
+
 class CellCreateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=True)
     parent = forms.CharField(max_length=500, required=False)
@@ -649,12 +685,15 @@ class CellCreateForm(MelissiResourceForm):
 class CellUpdateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=False)
     parent = forms.CharField(max_length=500, required=False)
+    number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
 
 class CellHandler(BaseHandler):
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     fields = ('pk','name', 'roots', 'owner',
-              'created', 'updated', 'deleted')
+              'created', 'updated', 'deleted',
+              'revisions',
+              )
     depth = 2
 
     @add_server_timestamp
@@ -723,6 +762,22 @@ class CellHandler(BaseHandler):
 
         else:
             # update name
+            if request.form.cleaned_data['number'] < len(cell.revisions):
+                # name conflict, do nothing?
+                # latest change wins
+                pass
+                # new_cell = Cell(owner = cell.owner,
+                #                 shared_with = cell.shared_with,
+                #                 roots = cell.roots,
+                #                 deleted = cell.deleted,
+                #                 name = cell.name,
+                #                 created = cell.created,
+                #                 updated = cell.updated,
+                #                 revisions = cell.revisions[:request.form.cleaned_data['number']]
+                #                 )
+                # cell = new_cell
+                # cell.save()
+
             if request.form.cleaned_data.get('name'):
                 cell.revisions.append(CellRevision(name=request.form.cleaned_data.get('name'),
                                                    resource=request.form.cleaned_data.get('resource')
@@ -889,6 +944,9 @@ class UserHandler(BaseHandler):
             return rc.DELETED
         else:
             raise APIForbidden({'user': "You don't have permission to delete user %s" % user.username})
+
+class ResourceHandler(BaseHandler):
+    fields = ('name', 'user', 'created', 'updated')
 
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )

@@ -38,16 +38,6 @@ class UserResource(Document):
         self.updated = datetime.now()
         super(UserResource, self).save()
 
-    def __unicode__(self):
-        return "User: %s Resource: %s" % (self.user, self.name)
-
-    def __repr__(self):
-        # I don't want to prepend the model type before __unicode__
-        # e.g. I just want __unicode__() value and not <Cell - __unicode__()>
-        #
-        return self.__unicode__()
-
-
 class Share(EmbeddedDocument):
     user = ReferenceField(User)
     mode = StringField(required=True)
