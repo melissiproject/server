@@ -34,7 +34,6 @@ def calculate_md5(file_object):
 def patch_file(source, delta):
     """ Source, delta, destination are django.core.files.File objects
     """
-
     f = librsync.PatchedFile(source, delta)
     source.seek(0)
     delta.seek(0)

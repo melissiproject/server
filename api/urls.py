@@ -5,7 +5,7 @@ from django.views.generic.simple import redirect_to
 
 from melisi.api.handlers import CellHandler, CellShareHandler, \
      DropletHandler, RevisionHandler, RevisionContentHandler, \
-     RevisionPatchHandler, UserHandler, StatusHandler
+     UserHandler, StatusHandler
 
 basic_auth = HttpBasicAuthentication(realm='melisi')
 cell_handler = Resource(CellHandler, authentication=basic_auth)
@@ -13,7 +13,7 @@ cell_share_handler = Resource(CellShareHandler, authentication=basic_auth)
 droplet_handler = Resource(DropletHandler, authentication=basic_auth)
 revision_handler = Resource(RevisionHandler, authentication=basic_auth)
 revision_content_handler = Resource(RevisionContentHandler, authentication=basic_auth)
-revision_patch_handler = Resource(RevisionPatchHandler, authentication=basic_auth)
+# revision_patch_handler = Resource(RevisionPatchHandler, authentication=basic_auth)
 user_handler = Resource(UserHandler, authentication=basic_auth)
 status_handler = Resource(StatusHandler, authentication=basic_auth)
 
@@ -28,10 +28,10 @@ urlpatterns = patterns(
     (r'^droplet/(?P<droplet_id>\w+)/revision/$', revision_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/latest/$', revision_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/latest/content/$', revision_content_handler),
-    (r'^droplet/(?P<droplet_id>\w+)/revision/latest/patch/$', revision_patch_handler),
+    # (r'^droplet/(?P<droplet_id>\w+)/revision/latest/patch/$', revision_patch_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/(?P<revision_id>\d+)/$', revision_handler),
     (r'^droplet/(?P<droplet_id>\w+)/revision/(?P<revision_id>\d+)/content/$', revision_content_handler),
-    (r'^droplet/(?P<droplet_id>\w+)/revision/(?P<revision_id>\d+)/patch/$', revision_patch_handler),
+    # (r'^droplet/(?P<droplet_id>\w+)/revision/(?P<revision_id>\d+)/patch/$', revision_patch_handler),
     (r'^droplet/$', droplet_handler),
 
     (r'^user/(?P<username>\w+)/$', user_handler),
