@@ -21,6 +21,7 @@ class MelissiUser(User):
         # create melissi cell
         cell = Cell(owner=user,
                     roots=[],
+                    name='melissi',
                     revisions=[CellRevision(name='melissi', resource=user_resource)]
                     )
 
@@ -51,7 +52,8 @@ class Share(EmbeddedDocument):
 class CellRevision(EmbeddedDocument):
     resource = ReferenceField(UserResource, required=True)
     created = DateTimeField(required=True, default=datetime.now)
-    name = StringField(required=True)
+    parent = ReferenceField("Cell", required=False)
+    name = StringField(required=False)
 
 class Cell(Document):
     owner = ReferenceField(User, required=True)
@@ -102,9 +104,7 @@ class Cell(Document):
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
-
         self.updated = self.revisions[-1].created
-        self.name = self.revisions[-1].name
         super(Cell, self).save()
 
     def set_deleted(self):
@@ -129,9 +129,10 @@ class Cell(Document):
 
 class DropletRevision(EmbeddedDocument):
     name = StringField(required=False)
+    cell = ReferenceField(Cell, required=False)
     resource = ReferenceField(UserResource, required=True)
     created = DateTimeField(required=True, default=datetime.now)
-    content = FileField(required=True)
+    content = FileField(required=False)
     patch = FileField(required=False)
 
     @property
@@ -156,31 +157,15 @@ class Droplet(Document):
     cell = ReferenceField(Cell, required=True)
     revisions = ListField(EmbeddedDocumentField(DropletRevision))
     deleted = BooleanField(default=False, required=True)
+    content = FileField(required=False)
+    patch = FileField(required=False)
 
     meta = {
         'indexes': ['revisions', 'cell']
         }
 
-    # def validate(self):
-    #     """ Droplet can have zero revisions """
-    #     q = Droplet.objects.get(name = self.name,
-    #                             cell = self.cell,
-    #                             deleted = False,
-    #                             )
-    #     if q.count() and (self.pk and
-    #     if self.pk and Droplet.objects.filter(name = self.name,
-    #                                           cell = self.cell,
-    #                                           deleted = False,
-    #                                           pk__ne = self.pk
-    #                                           ).count():
-    #         raise MongoValidationError("Name not unique %s, cell: %s" %\
-    #                                    (self.name, self.cell))
-    #     elif not self.pk and Droplet.objects.filter(name = self.name,
-    #                                                 cell = self.cell,
-    #                                                 deleted = False,
-    #                                                 ).count():
-    #         raise MongoValidationError("Name not unique %s, cell: %s" %\
-    #                                    (self.name, self.cell))
+    def validate(self):
+        return super(Droplet, self).validate()
 
     def set_deleted(self):
         # set deleted all related droplets

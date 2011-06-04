@@ -268,7 +268,7 @@ def _recursive_update_shares(cell, request_user):
     return number_of_shares_created
 
 class RevisionCreateForm(MelissiResourceForm):
-    number = forms.IntegerField(required=True, validators=[MinValueValidator(0)])
+    number = forms.IntegerField(required=True, validators=[MinValueValidator(1)])
     md5 = forms.CharField(max_length=200, min_length=1, required=True)
     # caution we use our home breweded FileField form item
     # to allow empty files. this is only for CreateForm
@@ -295,7 +295,7 @@ class RevisionUpdateForm(MelissiResourceForm):
                               )
 
 class RevisionHandler(BaseHandler):
-    allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
+    allowed_methods = ('GET', 'POST', 'DELETE')
     fields = (('resource', ('name', 'user')), 'created', 'name', 'content_md5', 'patch_md5')
     model = DropletRevision
 
@@ -316,7 +316,7 @@ class RevisionHandler(BaseHandler):
                 return droplet.revisions[revision_id]
             except IndexError:
                 raise APINotFound({'revision': 'Revision with id %s not found'%\
-                                   revision_id + 1}
+                                   (revision_id + 1)}
                                   )
 
     @add_server_timestamp
@@ -330,7 +330,25 @@ class RevisionHandler(BaseHandler):
         revision.resource = request.form.cleaned_data['resource']
         revision.content.put(request.form.cleaned_data['content'].file)
         revision.content.seek(0)
-        revision.name = droplet.name
+
+        if request.form.cleaned_data['number'] > len(droplet.revisions):
+            raise APIBadRequest("Invalid revision number. Too large")
+
+        if hasattr(droplet.content, 'md5') and droplet.content.md5 == revision.content.md5:
+            raise APIBadRequest("Nothing changed")
+
+        if request.form.cleaned_data['number'] < len(droplet.revisions):
+            # revision conflict, create new droplet
+            new_droplet = Droplet(name=droplet.name,
+                                  owner=droplet.owner,
+                                  created=droplet.created,
+                                  updated=droplet.updated,
+                                  cell=droplet.cell,
+                                  content=droplet.content,
+                                  patch=droplet.patch,
+                                  revisions=droplet.revisions[:request.form.cleaned_data['number']],
+                                  deleted=droplet.deleted)
+            droplet = new_droplet
 
         # verify integrity
         if revision.content.md5 != request.form.cleaned_data['md5']:
@@ -340,86 +358,74 @@ class RevisionHandler(BaseHandler):
                                  }
                                 )
 
-        if request.form.cleaned_data['number'] < len(droplet.revisions):
-            # revision conflict, create new droplet
-            new_droplet = Droplet(name=droplet.name,
-                                  owner=droplet.owner,
-                                  created=droplet.created,
-                                  updated=droplet.updated,
-                                  cell=droplet.cell,
-                                  revisions=droplet.revisions[:request.form.cleaned_data['number']],
-                                  deleted=droplet.deleted)
-            droplet = new_droplet
-
         droplet.revisions.append(revision)
+        droplet.content = revision.content
         droplet.save()
 
         # TODO we cannot just return droplet :(
         return {'pk':droplet.pk, 'name':droplet.name, 'revisions': droplet.revisions }
 
-    @add_server_timestamp
-    @check_write_permission
-    @validate(RevisionUpdateForm, ('POST', 'FILES'))
-    @watchdog_notfound
-    def update(self, request, droplet_id):
-        droplet = Droplet.objects.get(pk=droplet_id)
-        try:
-            previous_revision = droplet.revisions[request.form.cleaned_data['number'] - 1]
-        except IndexError:
-            raise APINotFound({'revision': 'Request to updated non existing revision with id %s' %\
-                               request.form.cleaned_data['number'] - 1
-                               })
+    # @add_server_timestamp
+    # @check_write_permission
+    # @validate(RevisionUpdateForm, ('POST', 'FILES'))
+    # @watchdog_notfound
+    # def update(self, request, droplet_id):
+    #     droplet = Droplet.objects.get(pk=droplet_id)
+    #     try:
+    #         previous_revision = droplet.revisions[request.form.cleaned_data['number'] - 1]
+    #     except IndexError:
+    #         raise APINotFound({'revision': 'Request to updated non existing revision with id %s' %\
+    #                            request.form.cleaned_data['number'] - 1
+    #                            })
 
-        revision = DropletRevision()
-        revision.resource = request.form.cleaned_data['resource']
-        revision.name = droplet.name
+    #     revision = DropletRevision()
+    #     revision.resource = request.form.cleaned_data['resource']
+    #     revision.name = droplet.name
 
-        if request.form.cleaned_data['patch'] == 'True':
-            revision.content.put(patch_file(previous_revision.content,
-                                            request.form.cleaned_data['content'])
-                                )
+    #     if request.form.cleaned_data['patch'] == 'True':
+    #         revision.content.put(patch_file(previous_revision.content,
+    #                                         request.form.cleaned_data['content'])
+    #                             )
 
-            # rewinding the file
-            request.form.cleaned_data['content'].file.seek(0)
-            revision.patch.put(request.form.cleaned_data['content'])
-        else:
-            revision.content.put(request.form.cleaned_data['content'])
+    #         # rewinding the file
+    #         request.form.cleaned_data['content'].file.seek(0)
+    #         revision.patch.put(request.form.cleaned_data['content'])
+    #     else:
+    #         revision.content.put(request.form.cleaned_data['content'])
 
-        # verify integrity
-        if revision.content.md5 != request.form.cleaned_data['md5']:
-            revision.content.delete()
-            raise APIBadRequest({'md5': 'Content hashes do not match %s VS %s' %\
-                                 (revision.content.md5, request.form.cleaned_data['md5'])
-                                 }
-                                )
+    #     # verify integrity
+    #     if revision.content.md5 != request.form.cleaned_data['md5']:
+    #         revision.content.delete()
+    #         raise APIBadRequest({'md5': 'Content hashes do not match %s VS %s' %\
+    #                              (revision.content.md5, request.form.cleaned_data['md5'])
+    #                              }
+    #                             )
 
-        if request.form.cleaned_data['number'] < len(droplet.revisions):
-            # revision conflict, create new droplet
-            new_droplet = Droplet(name=droplet.name,
-                                  owner=droplet.owner,
-                                  created=droplet.created,
-                                  updated=droplet.updated,
-                                  cell=droplet.cell,
-                                  revisions=droplet.revisions[:request.form.cleaned_data['number']],
-                                  deleted=droplet.deleted)
-            droplet = new_droplet
+    #     if request.form.cleaned_data['number'] < len(droplet.revisions) - 1:
+    #         # revision conflict, create new droplet
+    #         new_droplet = Droplet(name=droplet.name,
+    #                               owner=droplet.owner,
+    #                               created=droplet.created,
+    #                               updated=droplet.updated,
+    #                               cell=droplet.cell,
+    #                               revisions=droplet.revisions[:request.form.cleaned_data['number']],
+    #                               deleted=droplet.deleted)
+    #         droplet = new_droplet
 
 
-        droplet.revisions.append(revision)
-        droplet.save()
+    #     droplet.revisions.append(revision)
+    #     droplet.save()
 
-        # TODO we cannot just return droplet :(
-        return {'pk':droplet.pk, 'name':droplet.name, 'revisions': droplet.revisions }
+    #     # TODO we cannot just return droplet :(
+    #     return {'pk':droplet.pk, 'name':droplet.name, 'revisions': droplet.revisions }
 
     @check_write_permission
     @watchdog_notfound
     def delete(self, request, droplet_id, revision_id):
         droplet = Droplet.objects.get(pk=droplet_id)
         revision_id = int(revision_id) - 1
-        if revision_id < 0:
-            raise APIBadRequest({'revision': 'Invalid revision number: %s' %\
-                                 revision_id
-                                 })
+        if revision_id == 0:
+            raise APIBadRequest({'revision': 'You cannot delete revision 1'})
 
         try:
             droplet.revisions.pop(revision_id)
@@ -427,6 +433,7 @@ class RevisionHandler(BaseHandler):
             raise APINotFound({'revision': 'Revision with id %s not found'%\
                                revision_id + 1}
                               )
+
         droplet.save()
 
         return rc.DELETED
@@ -437,46 +444,70 @@ class RevisionContentHandler(BaseHandler):
     def read(self, request, droplet_id, revision_id=None):
         droplet = Droplet.objects.get(pk=droplet_id)
         if not revision_id:
-            revision_id = len(droplet.revisions)
+            if hasattr(droplet.content, 'md5'):
+                return sendfile(droplet.content, "%s" % droplet.name)
+            else:
+                raise APIBadRequest({'revision': 'Droplet does not have any content yet'
+                                     })
 
-        revision_id = int(revision_id) -1
-        if revision_id < 0:
-            raise APIBadRequest({'revision': 'Invalid revision number: %s' %\
-                                 revision_id
-                                 })
+        revision_id = int(revision_id) - 1
+
+        # this is smaller than 1 because revision[0]
+        # is always without content
+        if revision_id == 0:
+            raise APIBadRequest({'revision': 'Revision 1 does not have content'})
+
+        if revision_id > len(droplet.revisions) - 1:
+            raise APIBadRequest({'revision': 'Revision %s does not exist' %\
+                                 (revision_id+1)})
+
+        if not hasattr(droplet.revisions[revision_id].content, 'md5'):
+            raise APIBadRequest({'revision': 'Revision %s does not have content' %\
+                                (revision_id + 1)
+                                })
 
         try:
             return sendfile(droplet.revisions[revision_id].content, droplet.name)
         except IndexError:
             raise APINotFound({'revision': 'Revision with id %s not found'%\
-                               revision_id + 1}
+                               (revision_id + 1)}
                               )
 
-class RevisionPatchHandler(BaseHandler):
-    allowed_methods = ('GET',)
+# class RevisionPatchHandler(BaseHandler):
+#     allowed_methods = ('GET',)
 
-    @check_read_permission
-    @watchdog_notfound
-    def read(self, request, droplet_id, revision_id=None):
-        droplet = Droplet.objects.get(pk=droplet_id)
-        if not revision_id:
-            revision_id = len(droplet.revisions)
+#     @check_read_permission
+#     @watchdog_notfound
+#     def read(self, request, droplet_id, revision_id=None):
+#         droplet = Droplet.objects.get(pk=droplet_id)
+#         if not revision_id:
+#             if hasattr(droplet.patch, 'md5'):
+#                 return sendfile(droplet.patch, "%s.patch" % droplet.name)
+#             else:
+#                 raise APIBadRequest({'revision': 'Droplet does not have any patch yet'
+#                                      })
 
-        revision_id = int(revision_id) -1
-        if revision_id < 1:
-            # this is < 1 because revision 1 does not have a
-            # patch!
-            raise APIBadRequest({'revision': 'Invalid revision number: %s. Patching needs at least an existing revision' %\
-                         revision_id
-                         })
+#         revision_id = int(revision_id)
+#         # this is smaller than 1 because revision[0]
+#         # is always without content
+#         if revision_id < 2:
+#             # this is < 1 because revision 1 does not have a
+#             # patch!
+#             raise APIBadRequest({'revision': 'Invalid revision number: %' %\
+#                                  revision_id
+#                                  })
 
+#         if not droplet.revisions[revision_id].patch:
+#             raise APIBadRequest({'revision': 'Revision %s does not have patch' %\
+#                                 revisions_id
+#                                 })
 
-        try:
-            return sendfile(droplet.revisions[revision_id].patch, "%s.patch" % droplet.name)
-        except IndexError:
-            raise APINotFound({'revision': 'Revision with id %s not found'%\
-                               revision_id + 1}
-                              )
+#         try:
+#             return sendfile(droplet.revisions[revision_id].patch, "%s.patch" % droplet.name)
+#         except IndexError:
+#             raise APINotFound({'revision': 'Revision with id %s not found'%\
+#                                revision_id }
+#                               )
 
 class DropletCreateForm(MelissiResourceForm):
     name = forms.CharField(max_length=500, min_length=1, required=False)
@@ -521,8 +552,15 @@ class DropletHandler(BaseHandler):
     def create(self, request):
         cell = Cell.objects.get(pk = request.form.cleaned_data['cell'])
         d = Droplet(owner = request.user,
+                    cell = cell,
                     name = request.form.cleaned_data['name'],
-                    cell = cell)
+                    revisions = [
+                        DropletRevision(resource=request.form.cleaned_data['resource'],
+                                        name = request.form.cleaned_data['name'],
+                                        cell = cell,
+                                        )
+                        ],
+                    )
         d.save()
         return d
 
@@ -532,25 +570,36 @@ class DropletHandler(BaseHandler):
     @watchdog_notfound
     def update(self, request, droplet_id):
         droplet = Droplet.objects.get(pk=droplet_id)
-        if request.form.cleaned_data.get('name'):
-            if request.form.cleaned_data['number'] < len(droplet.revisions):
-                # name conflict, do nothing?
-                # latest change wins
-                pass
 
-            dr = DropletRevision(name=request.form.cleaned_data['name'],
-                                 resource=request.form.cleaned_data['resource']
-                                 )
-            if len(droplet.revisions):
-                dr.content=droplet.revisions[-1].content
-                dr.patch=droplet.revisions[-1].patch
+        if request.form.cleaned_data['number'] != len(droplet.revisions):
+            # name conflict, do nothing?
+            # latest change wins
+            raise APIBadRequest("Revision conflict")
 
+        if droplet.deleted:
+            raise APIBadRequest("Droplet deleted, cannot modify")
+
+        commit = False
+
+        dr = DropletRevision(resource=request.form.cleaned_data['resource'])
+        if request.form.cleaned_data['name'] and \
+           droplet.name != request.form.cleaned_data['name']:
+            dr.name = request.form.cleaned_data['name']
+            droplet.name = dr.name
+            commit = True
+
+        if request.form.cleaned_data['cell'] and \
+               droplet.cell.pk != request.form.cleaned_data['cell'].pk:
+            dr.cell = request.form.cleaned_data['cell']
+            droplet.cell = dr.cell
+            commit = True
+
+        if commit:
             droplet.revisions.append(dr)
-            droplet.name = request.form.cleaned_data['name']
-        droplet.cell = request.form.cleaned_data.get('cell') or droplet.cell
-        droplet.save()
-
-        return droplet
+            droplet.save()
+            return droplet
+        else:
+            raise APIBadRequest("Nothing changed")
 
     @check_write_permission
     @watchdog_notfound
@@ -715,12 +764,15 @@ class CellHandler(BaseHandler):
             owner = parent_cell.owner
             roots = [parent_cell] + parent_cell.roots
         else:
+            parent_cell = None
             owner = request.user
             roots = []
+
         c = Cell(owner = owner,
                  roots = roots,
                  revisions = [CellRevision(resource=request.form.cleaned_data['resource'],
-                                           name = request.form.cleaned_data['name']
+                                           name = request.form.cleaned_data['name'],
+                                           parent = parent_cell
                                            )]
                  )
         c.save()
@@ -762,36 +814,26 @@ class CellHandler(BaseHandler):
 
         else:
             # update name
-            if request.form.cleaned_data['number'] < len(cell.revisions):
+            if request.form.cleaned_data['number'] != len(cell.revisions):
                 # name conflict, do nothing?
                 # latest change wins
-                pass
-                # new_cell = Cell(owner = cell.owner,
-                #                 shared_with = cell.shared_with,
-                #                 roots = cell.roots,
-                #                 deleted = cell.deleted,
-                #                 name = cell.name,
-                #                 created = cell.created,
-                #                 updated = cell.updated,
-                #                 revisions = cell.revisions[:request.form.cleaned_data['number']]
-                #                 )
-                # cell = new_cell
-                # cell.save()
+                raise APIBadRequest("Revision conflict")
 
-            if request.form.cleaned_data.get('name'):
-                cell.revisions.append(CellRevision(name=request.form.cleaned_data.get('name'),
-                                                   resource=request.form.cleaned_data.get('resource')
-                                                   )
-                                      )
-                cell.save()
+            cr = CellRevision(resource=request.form.cleaned_data.get('resource'))
+            commit = False
 
             # update parents
-            if len(request.form.cleaned_data.get('parent', '')):
+            if request.form.cleaned_data.get('parent') and \
+                   ((cell.roots and \
+                    cell.roots[0].pk != request.form.cleaned_data.get('parent')) or True):
+
                 parent = Cell.objects.get(pk = request.form.cleaned_data['parent'])
                 q = Cell.objects.filter(Q(roots__contains = cell) | Q(pk = cell.pk))
                 q.update(pull_all__roots = cell.roots)
                 q.update(push_all__roots = [parent] + parent.roots)
                 q.update(set__updated = datetime.now())
+
+                cell.reload()
 
                 # update shared_with timestamps of shared root
                 # find parents of parent
@@ -808,10 +850,21 @@ class CellHandler(BaseHandler):
                     timestamp = datetime.now()
                     for share in c.shared_with:
                         share.created = timestamp
-                    c.save()
 
-            cell.reload()
-            return cell
+                cr.cell = parent
+                commit = True
+
+            if request.form.cleaned_data.get('name') and \
+               cell.name != request.form.cleaned_data.get('name'):
+                cr.name = request.form.cleaned_data.get('name')
+                commit = True
+
+            if commit:
+                cell.revisions.append(cr)
+                cell.save()
+                return cell
+            else:
+                raise APIBadRequest("Nothing changed")
 
     @add_server_timestamp
     @check_write_permission
