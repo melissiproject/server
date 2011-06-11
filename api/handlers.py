@@ -330,8 +330,8 @@ class RevisionHandler(BaseHandler):
         revision.resource = request.form.cleaned_data['resource']
         revision.content.put(request.form.cleaned_data['content'].file)
         revision.content.seek(0)
-
         if request.form.cleaned_data['number'] > len(droplet.revisions):
+            print "hey"
             raise APIBadRequest("Invalid revision number. Too large")
 
         if hasattr(droplet.content, 'md5') and droplet.content.md5 == revision.content.md5:
@@ -532,11 +532,10 @@ class DropletUpdateForm(MelissiResourceForm):
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     model = Droplet
-    fields = ('pk', 'name', 'created', 'updated', 'deleted', 'owner',
-              'revisions', 'cell')
-    # fields = ('pk', ('cell', ('name', 'pk', ('owner', ('username', 'pk')))), 'revisions')
-    # fields = ('revisions',)
-    depth = 3
+    fields = ('pk', ('cell', ('name', 'pk', ('owner', ('username', 'pk', 'email')))),
+              'revisions', 'name', 'owner', 'created', 'updated', 'deleted',
+              'content_md5', 'patch_md5'
+              )
 
     @add_server_timestamp
     @check_read_permission
@@ -635,7 +634,6 @@ class CellShareHandler(BaseHandler):
     model = Share
     fields = ('user', 'mode', 'name', 'created')
     allowed_methods = ('GET', 'POST', 'DELETE')
-    depth = 2
 
     @add_server_timestamp
     @check_read_permission
@@ -743,7 +741,6 @@ class CellHandler(BaseHandler):
               'created', 'updated', 'deleted',
               'revisions',
               )
-    depth = 2
 
     @add_server_timestamp
     @check_read_permission
@@ -770,6 +767,7 @@ class CellHandler(BaseHandler):
 
         c = Cell(owner = owner,
                  roots = roots,
+                 name = request.form.cleaned_data['name'],
                  revisions = [CellRevision(resource=request.form.cleaned_data['resource'],
                                            name = request.form.cleaned_data['name'],
                                            parent = parent_cell
@@ -859,12 +857,12 @@ class CellHandler(BaseHandler):
                 cr.name = request.form.cleaned_data.get('name')
                 commit = True
 
-            if commit:
-                cell.revisions.append(cr)
-                cell.save()
-                return cell
-            else:
+            if not commit:
                 raise APIBadRequest("Nothing changed")
+
+            cell.revisions.append(cr)
+            cell.save()
+            return cell
 
     @add_server_timestamp
     @check_write_permission
@@ -928,17 +926,17 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     @add_server_timestamp
     @validate(UserCreateForm, ('POST',))
     def create(self, request):
-        if getattr(settings, 'MELISSI_REGISTRATIONS_OPEN', False):
-            user = MelissiUser.create_user(request.form.cleaned_data['username'],
-                                           request.form.cleaned_data['email'],
-                                           request.form.cleaned_data['password']
-                                           )
-            user.first_name = request.form.cleaned_data['first_name']
-            user.last_name = request.form.cleaned_data['last_name']
-            user.save()
-            return user
-        else:
+        if not getattr(settings, 'MELISSI_REGISTRATIONS_OPEN', False):
             raise APIForbidden({'register': 'Registrations are closed'})
+
+        user = MelissiUser.create_user(request.form.cleaned_data['username'],
+                                       request.form.cleaned_data['email'],
+                                       request.form.cleaned_data['password']
+                                       )
+        user.first_name = request.form.cleaned_data['first_name']
+        user.last_name = request.form.cleaned_data['last_name']
+        user.save()
+        return user
 
 class UserHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
@@ -1003,7 +1001,6 @@ class ResourceHandler(BaseHandler):
 
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
-    depth = 2
 
     @add_server_timestamp
     def read(self, request, timestamp=None):

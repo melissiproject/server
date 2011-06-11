@@ -84,6 +84,8 @@ class Cell(Document):
         if len(self.revisions) == 0:
             raise MongoValidationError("Cell must have at least one revision")
 
+        if self.name and len(self.name) == 0:
+            raise ValidationError("Cell name cannot be empty")
         # ensure that shared_with does not contain the same user twice
 
         # ensure that shared_with has values only for one cell in a tree
@@ -104,7 +106,10 @@ class Cell(Document):
 
     def save(self):
         # TODO until we fix mongoengine to support auto_now_add and auto_now
-        self.updated = self.revisions[-1].created
+        try:
+            self.updated = self.revisions[-1].created
+        except IndexError:
+            ValidationError("Cell must have at least one revision")
         super(Cell, self).save()
 
     def set_deleted(self):
@@ -164,7 +169,23 @@ class Droplet(Document):
         'indexes': ['revisions', 'cell']
         }
 
+    @property
+    def content_md5(self):
+        try:
+            return self.content.md5
+        except AttributeError:
+            return ''
+
+    @property
+    def patch_md5(self):
+        try:
+            return self.patch.md5
+        except AttributeError:
+            return ''
+
     def validate(self):
+        if self.name and len(self.name) == 0:
+            raise ValidationError("Droplet name cannot be empty")
         return super(Droplet, self).validate()
 
     def set_deleted(self):
