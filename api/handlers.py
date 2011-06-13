@@ -8,7 +8,6 @@ from mongoengine.django.auth import User, AnonymousUser
 from mongoengine import Q
 from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
-from django.core.validators import MinValueValidator
 
 import time
 from datetime import datetime, timedelta
