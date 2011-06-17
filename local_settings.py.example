@@ -1,4 +1,3 @@
-import mongoengine
 import os
 import settings
 
@@ -12,10 +11,9 @@ SECRET_KEY = ''
 MELISSI_REGISTRATIONS_OPEN = True
 MELISSI_QUEUE_SERVICE = None
 MELISSI_DATABASE = None
+MELISSI_QUOTA = 100 * 1024 # 100 megabyte
 
 SENDFILE=False
 
 # uncomment to activate gunicorn
 # INSTALLED_APPS = settings.INSTALLED_APPS + ('gunicorn', )
-
-mongoengine.connect(MELISSI_DATABASE)
