@@ -12,7 +12,7 @@ import hashlib
 from datetime import datetime
 
 def calculate_upload_path(instance, filename):
-    return "%s-%s" % (instance.droplet.id, instance.content)
+    return "%s" % (instance.droplet.id)
 
 def calculate_hash(descriptor):
     digest = hashlib.sha256()
@@ -50,7 +50,8 @@ class Cell(MPTTModel):
             # create first revision
             revision = CellRevision(cell=instance,
                                     resource=instance.owner.userresource_set.all()[0],
-                                    parent=instance.parent)
+                                    parent=instance.parent,
+                                    number=1)
             revision.save()
 
     def clean(self):
@@ -121,6 +122,8 @@ class Share(models.Model):
                                     default=1)
     name = models.CharField(max_length=500, blank=True)
     parent = models.ForeignKey(Cell, related_name='share_parent')
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
 
     class Meta:
         unique_together = (('cell', 'user'),)
@@ -182,7 +185,8 @@ class Droplet(models.Model):
             # create first revision
             revision = DropletRevision(droplet=instance,
                                        resource=instance.owner.userresource_set.all()[0],
-                                       cell=instance.cell)
+                                       cell=instance.cell,
+                                       number=1)
             revision.save()
 
 models.signals.post_save.connect(Droplet._first_revision_creator, sender=Droplet)
