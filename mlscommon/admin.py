@@ -8,6 +8,7 @@ from models import Cell, CellRevision, \
 class CellRevisionInline(admin.TabularInline):
     model = CellRevision
     fk_name = 'cell'
+    ordering = ("-number",)
 
 class CellAdmin(admin.ModelAdmin):
     inlines = [CellRevisionInline]
