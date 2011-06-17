@@ -11,7 +11,7 @@ class CellRevisionInline(admin.TabularInline):
 
 class CellAdmin(admin.ModelAdmin):
     inlines = [CellRevisionInline]
-    list_display = ("name", "owner", "parent")
+    list_display = ("name", "owner", "parent", "deleted")
 
 admin.site.register(Cell, CellAdmin)
 

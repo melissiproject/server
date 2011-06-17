@@ -8,8 +8,20 @@ from django.core.exceptions import ValidationError
 from django.conf import settings
 from mptt.models import MPTTModel
 
+import hashlib
+from datetime import datetime
+
 def calculate_upload_path(instance, filename):
     return "%s-%s" % (instance.droplet.id, instance.content)
+
+def calculate_hash(descriptor):
+    digest = hashlib.sha256()
+    while True:
+        r = descriptor.read(10240)
+        if not r: break
+        digest.update(r)
+
+    return digest.hexdigest()
 
 class PatchValidator(object):
     def __call__(self, value):
@@ -59,6 +71,19 @@ class Cell(MPTTModel):
             self.owner = self.parent.owner
         return super(Cell, self).save(*args, **kwargs)
 
+    def set_deleted(self):
+        # set children cells and droplets to deleted
+        self.get_descendants().update(deleted=True, updated=datetime.now())
+        Droplet.objects.filter(cell__in=self.get_descendants()).update(deleted=True,
+                                                                       updated=datetime.now())
+
+        # set self and own droplets to deleted
+        Droplet.objects.filter(cell=self).update(deleted=True,
+                                                 updated=datetime.now())
+
+        self.deleted=True
+        self.save()
+
 models.signals.post_save.connect(Cell._first_revision_creator, sender=Cell)
 
 
@@ -67,8 +92,12 @@ class CellRevision(models.Model):
     name = models.CharField(max_length=500, null=True, blank=True)
     parent = models.ForeignKey(Cell, null=True, blank=True,
                                related_name='revision_parent')
+    number = models.PositiveIntegerField()
     resource = models.ForeignKey("UserResource")
     created = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = (('cell', 'number'),)
 
     @classmethod
     def _update_cell(self, sender, instance, **kwargs):
@@ -131,6 +160,8 @@ class Droplet(models.Model):
         null=True,
         validators=[PatchValidator()]
         )
+    content_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    patch_sha256 = models.CharField(max_length=64, null=True, blank=True)
 
     def __unicode__(self):
         return self.name
@@ -139,6 +170,11 @@ class Droplet(models.Model):
         # set owner always to cell.owner
         self.owner = self.cell.owner
         return super(Droplet, self).save(*args, **kwargs)
+
+    def set_deleted(self):
+        # set deleted
+        self.deleted = True
+        self.save()
 
     @classmethod
     def _first_revision_creator(self, sender, instance, **kwargs):
@@ -156,6 +192,7 @@ class DropletRevision(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     resource = models.ForeignKey("UserResource")
     name = models.CharField(max_length=500, blank=True, null=True)
+    number = models.PositiveIntegerField()
     cell = models.ForeignKey(Cell, blank=True, null=True)
     content = models.FileField(
         storage=FileSystemStorage(location='/tmp/melissi-sandbox'),
@@ -169,6 +206,26 @@ class DropletRevision(models.Model):
         null=True,
         validators=[PatchValidator()]
         )
+    content_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    patch_sha256 = models.CharField(max_length=64, null=True, blank=True)
+
+    class Meta:
+        unique_together = (('droplet', 'number'),)
+
+    def clean(self):
+        if self.content and not self.content_sha256:
+            self.content_sha256 = calculate_hash(self.content)
+
+        elif not self.content and self.content_sha256:
+            self.content_sha256 = None
+
+        if self.patch and not self.patch_sha256:
+            self.patch_sha256 = calculate_hash(self.patch)
+
+        elif not self.patch and self.patch_sha256:
+            self.patch_sha256 = None
+
+        return super(DropletRevision, self).clean()
 
     @classmethod
     def _update_droplet(self, sender, instance, **kwargs):
@@ -181,9 +238,11 @@ class DropletRevision(models.Model):
 
         if instance.content:
             instance.droplet.content = instance.content
+            instance.droplet.content_sha256 = instance.content_sha256
 
         if instance.patch:
             instance.droplet.patch = instance.patch
+            instance.droplet.patch_sha256 = instance.patch_sha256
 
         instance.droplet.save()
 
