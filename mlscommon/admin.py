@@ -12,7 +12,9 @@ class CellRevisionInline(admin.TabularInline):
 
 class CellAdmin(admin.ModelAdmin):
     inlines = [CellRevisionInline]
-    list_display = ("name", "owner", "parent", "deleted")
+    list_display = ("id", "name", "owner", "parent", "deleted")
+    list_display_links = ("id", "name")
+    search_fields = ("name", "owner__username")
 
 admin.site.register(Cell, CellAdmin)
 
@@ -24,6 +26,9 @@ class DropletAdmin(admin.ModelAdmin):
 
 admin.site.register(Droplet, DropletAdmin)
 
-admin.site.register(Share)
+class ShareAdmin(admin.ModelAdmin):
+    list_display = ("cell", "user", "mode", "parent")
+
+admin.site.register(Share, ShareAdmin)
 admin.site.register(UserResource)
 admin.site.register(UserProfile)
