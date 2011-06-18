@@ -40,6 +40,7 @@ class Cell(MPTTModel):
     parent = models.ForeignKey('self',
                                null=True, blank=True,
                                related_name='children')
+    revisions = models.PositiveIntegerField(default=0)
 
     def __unicode__(self):
         return "[%s:%s]" % (self.id, self.name)
@@ -109,6 +110,9 @@ class CellRevision(models.Model):
         if instance.parent:
             instance.cell.parent = instance.parent
 
+        # increase number of revisions
+        instance.cell.revisions += 1
+
         instance.cell.save()
 
 models.signals.post_save.connect(CellRevision._update_cell, sender=CellRevision)
@@ -121,7 +125,8 @@ class Share(models.Model):
                                              ),
                                     default=1)
     name = models.CharField(max_length=500, blank=True)
-    parent = models.ForeignKey(Cell, related_name='share_parent')
+    parent = models.ForeignKey(Cell, related_name='share_parent',
+                               blank=True, null=True)
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
@@ -138,6 +143,11 @@ class Share(models.Model):
 
         if self.name == '':
             self.name = self.cell.name
+
+        if not self.parent:
+            self.parent = Cell.objects.get(owner=self.user,
+                                           name='melissi',
+                                           parent=None)
 
         return super(Share, self).clean()
 
@@ -165,6 +175,7 @@ class Droplet(models.Model):
         )
     content_sha256 = models.CharField(max_length=64, null=True, blank=True)
     patch_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    revisions = models.PositiveIntegerField(default=0)
 
     def __unicode__(self):
         return self.name
@@ -247,6 +258,9 @@ class DropletRevision(models.Model):
         if instance.patch:
             instance.droplet.patch = instance.patch
             instance.droplet.patch_sha256 = instance.patch_sha256
+
+        # increase number of revisions
+        instance.droplet.revisions += 1
 
         instance.droplet.save()
 
