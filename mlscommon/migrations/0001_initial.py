@@ -16,7 +16,8 @@ class Migration(SchemaMigration):
             ('name', self.gf('django.db.models.fields.CharField')(max_length=500)),
             ('created', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
             ('updated', self.gf('django.db.models.fields.DateTimeField')(auto_now=True, blank=True)),
-            ('parent', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='children', null=True, to=orm['mlscommon.Cell'])),
+            ('parent', self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='children', null=True, blank=True, to=orm['mlscommon.Cell'])),
+            ('revisions', self.gf('django.db.models.fields.PositiveIntegerField')(default=0)),
             ('lft', self.gf('django.db.models.fields.PositiveIntegerField')(db_index=True)),
             ('rght', self.gf('django.db.models.fields.PositiveIntegerField')(db_index=True)),
             ('tree_id', self.gf('django.db.models.fields.PositiveIntegerField')(db_index=True)),
@@ -28,17 +29,27 @@ class Migration(SchemaMigration):
         db.create_table('mlscommon_cellrevision', (
             ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('cell', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Cell'])),
+            ('name', self.gf('django.db.models.fields.CharField')(default=None, max_length=500, null=True, blank=True)),
+            ('parent', self.gf('django.db.models.fields.related.ForeignKey')(default=None, related_name='revision_parent', null=True, blank=True, to=orm['mlscommon.Cell'])),
+            ('number', self.gf('django.db.models.fields.PositiveIntegerField')()),
             ('resource', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.UserResource'])),
             ('created', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
-            ('parent', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='revision_parent', null=True, to=orm['mlscommon.Cell'])),
         ))
         db.send_create_signal('mlscommon', ['CellRevision'])
+
+        # Adding unique constraint on 'CellRevision', fields ['cell', 'number']
+        db.create_unique('mlscommon_cellrevision', ['cell_id', 'number'])
 
         # Adding model 'Share'
         db.create_table('mlscommon_share', (
             ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('cell', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Cell'])),
             ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['auth.User'])),
+            ('mode', self.gf('django.db.models.fields.SmallIntegerField')(default=1)),
+            ('name', self.gf('django.db.models.fields.CharField')(max_length=500, blank=True)),
+            ('parent', self.gf('django.db.models.fields.related.ForeignKey')(blank=True, related_name='share_parent', null=True, to=orm['mlscommon.Cell'])),
+            ('created', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
+            ('updated', self.gf('django.db.models.fields.DateTimeField')(auto_now=True, blank=True)),
         ))
         db.send_create_signal('mlscommon', ['Share'])
 
@@ -54,8 +65,11 @@ class Migration(SchemaMigration):
             ('owner', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['auth.User'])),
             ('cell', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Cell'])),
             ('deleted', self.gf('django.db.models.fields.BooleanField')(default=False)),
-            ('content', self.gf('django.db.models.fields.files.FileField')(max_length=100, null=True, blank=True)),
+            ('content', self.gf('django.db.models.fields.files.FileField')(max_length=100)),
             ('patch', self.gf('django.db.models.fields.files.FileField')(max_length=100, null=True, blank=True)),
+            ('content_sha256', self.gf('django.db.models.fields.CharField')(max_length=64)),
+            ('patch_sha256', self.gf('django.db.models.fields.CharField')(max_length=64, null=True, blank=True)),
+            ('revisions', self.gf('django.db.models.fields.PositiveIntegerField')(default=0)),
         ))
         db.send_create_signal('mlscommon', ['Droplet'])
 
@@ -64,25 +78,29 @@ class Migration(SchemaMigration):
             ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
             ('droplet', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Droplet'])),
             ('created', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
-            ('name', self.gf('django.db.models.fields.CharField')(max_length=500)),
-            ('cell', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Cell'])),
-            ('content', self.gf('django.db.models.fields.files.FileField')(max_length=100, null=True, blank=True)),
-            ('patch', self.gf('django.db.models.fields.files.FileField')(max_length=100, null=True, blank=True)),
+            ('resource', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.UserResource'])),
+            ('name', self.gf('django.db.models.fields.CharField')(max_length=500, null=True, blank=True)),
+            ('number', self.gf('django.db.models.fields.PositiveIntegerField')()),
+            ('cell', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['mlscommon.Cell'], null=True, blank=True)),
+            ('content', self.gf('django.db.models.fields.files.FileField')(default=None, max_length=100, null=True, blank=True)),
+            ('patch', self.gf('django.db.models.fields.files.FileField')(default=None, max_length=100, null=True, blank=True)),
+            ('content_sha256', self.gf('django.db.models.fields.CharField')(default=None, max_length=64, null=True, blank=True)),
+            ('patch_sha256', self.gf('django.db.models.fields.CharField')(default=None, max_length=64, null=True, blank=True)),
         ))
         db.send_create_signal('mlscommon', ['DropletRevision'])
+
+        # Adding unique constraint on 'DropletRevision', fields ['droplet', 'number']
+        db.create_unique('mlscommon_dropletrevision', ['droplet_id', 'number'])
 
         # Adding model 'UserResource'
         db.create_table('mlscommon_userresource', (
             ('id', self.gf('django.db.models.fields.AutoField')(primary_key=True)),
-            ('name', self.gf('django.db.models.fields.CharField')(max_length=500)),
+            ('name', self.gf('django.db.models.fields.CharField')(default='melissi', max_length=500)),
             ('user', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['auth.User'])),
             ('created', self.gf('django.db.models.fields.DateTimeField')(auto_now_add=True, blank=True)),
             ('updated', self.gf('django.db.models.fields.DateTimeField')(auto_now=True, blank=True)),
         ))
         db.send_create_signal('mlscommon', ['UserResource'])
-
-        # Adding unique constraint on 'UserResource', fields ['name', 'user']
-        db.create_unique('mlscommon_userresource', ['name', 'user_id'])
 
         # Adding model 'UserProfile'
         db.create_table('mlscommon_userprofile', (
@@ -95,11 +113,14 @@ class Migration(SchemaMigration):
 
     def backwards(self, orm):
         
-        # Removing unique constraint on 'UserResource', fields ['name', 'user']
-        db.delete_unique('mlscommon_userresource', ['name', 'user_id'])
+        # Removing unique constraint on 'DropletRevision', fields ['droplet', 'number']
+        db.delete_unique('mlscommon_dropletrevision', ['droplet_id', 'number'])
 
         # Removing unique constraint on 'Share', fields ['cell', 'user']
         db.delete_unique('mlscommon_share', ['cell_id', 'user_id'])
+
+        # Removing unique constraint on 'CellRevision', fields ['cell', 'number']
+        db.delete_unique('mlscommon_cellrevision', ['cell_id', 'number'])
 
         # Deleting model 'Cell'
         db.delete_table('mlscommon_cell')
@@ -169,45 +190,60 @@ class Migration(SchemaMigration):
             'lft': ('django.db.models.fields.PositiveIntegerField', [], {'db_index': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '500'}),
             'owner': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"}),
-            'parent': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'children'", 'null': 'True', 'to': "orm['mlscommon.Cell']"}),
+            'parent': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'related_name': "'children'", 'null': 'True', 'blank': 'True', 'to': "orm['mlscommon.Cell']"}),
+            'revisions': ('django.db.models.fields.PositiveIntegerField', [], {'default': '0'}),
             'rght': ('django.db.models.fields.PositiveIntegerField', [], {'db_index': 'True'}),
             'tree_id': ('django.db.models.fields.PositiveIntegerField', [], {'db_index': 'True'}),
             'updated': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'})
         },
         'mlscommon.cellrevision': {
-            'Meta': {'object_name': 'CellRevision'},
+            'Meta': {'ordering': "('-number',)", 'unique_together': "(('cell', 'number'),)", 'object_name': 'CellRevision'},
             'cell': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Cell']"}),
             'created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'parent': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'revision_parent'", 'null': 'True', 'to': "orm['mlscommon.Cell']"}),
+            'name': ('django.db.models.fields.CharField', [], {'default': 'None', 'max_length': '500', 'null': 'True', 'blank': 'True'}),
+            'number': ('django.db.models.fields.PositiveIntegerField', [], {}),
+            'parent': ('django.db.models.fields.related.ForeignKey', [], {'default': 'None', 'related_name': "'revision_parent'", 'null': 'True', 'blank': 'True', 'to': "orm['mlscommon.Cell']"}),
             'resource': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.UserResource']"})
         },
         'mlscommon.droplet': {
             'Meta': {'object_name': 'Droplet'},
             'cell': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Cell']"}),
-            'content': ('django.db.models.fields.files.FileField', [], {'max_length': '100', 'null': 'True', 'blank': 'True'}),
+            'content': ('django.db.models.fields.files.FileField', [], {'max_length': '100'}),
+            'content_sha256': ('django.db.models.fields.CharField', [], {'max_length': '64'}),
             'created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'deleted': ('django.db.models.fields.BooleanField', [], {'default': 'False'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
             'name': ('django.db.models.fields.CharField', [], {'max_length': '500'}),
             'owner': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"}),
             'patch': ('django.db.models.fields.files.FileField', [], {'max_length': '100', 'null': 'True', 'blank': 'True'}),
+            'patch_sha256': ('django.db.models.fields.CharField', [], {'max_length': '64', 'null': 'True', 'blank': 'True'}),
+            'revisions': ('django.db.models.fields.PositiveIntegerField', [], {'default': '0'}),
             'updated': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'})
         },
         'mlscommon.dropletrevision': {
-            'Meta': {'object_name': 'DropletRevision'},
-            'cell': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Cell']"}),
-            'content': ('django.db.models.fields.files.FileField', [], {'max_length': '100', 'null': 'True', 'blank': 'True'}),
+            'Meta': {'ordering': "('number',)", 'unique_together': "(('droplet', 'number'),)", 'object_name': 'DropletRevision'},
+            'cell': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Cell']", 'null': 'True', 'blank': 'True'}),
+            'content': ('django.db.models.fields.files.FileField', [], {'default': 'None', 'max_length': '100', 'null': 'True', 'blank': 'True'}),
+            'content_sha256': ('django.db.models.fields.CharField', [], {'default': 'None', 'max_length': '64', 'null': 'True', 'blank': 'True'}),
             'created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'droplet': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Droplet']"}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '500'}),
-            'patch': ('django.db.models.fields.files.FileField', [], {'max_length': '100', 'null': 'True', 'blank': 'True'})
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '500', 'null': 'True', 'blank': 'True'}),
+            'number': ('django.db.models.fields.PositiveIntegerField', [], {}),
+            'patch': ('django.db.models.fields.files.FileField', [], {'default': 'None', 'max_length': '100', 'null': 'True', 'blank': 'True'}),
+            'patch_sha256': ('django.db.models.fields.CharField', [], {'default': 'None', 'max_length': '64', 'null': 'True', 'blank': 'True'}),
+            'resource': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.UserResource']"})
         },
         'mlscommon.share': {
             'Meta': {'unique_together': "(('cell', 'user'),)", 'object_name': 'Share'},
             'cell': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['mlscommon.Cell']"}),
+            'created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
+            'mode': ('django.db.models.fields.SmallIntegerField', [], {'default': '1'}),
+            'name': ('django.db.models.fields.CharField', [], {'max_length': '500', 'blank': 'True'}),
+            'parent': ('django.db.models.fields.related.ForeignKey', [], {'blank': 'True', 'related_name': "'share_parent'", 'null': 'True', 'to': "orm['mlscommon.Cell']"}),
+            'updated': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
         },
         'mlscommon.userprofile': {
@@ -217,10 +253,10 @@ class Migration(SchemaMigration):
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']", 'unique': 'True'})
         },
         'mlscommon.userresource': {
-            'Meta': {'unique_together': "(('name', 'user'),)", 'object_name': 'UserResource'},
+            'Meta': {'object_name': 'UserResource'},
             'created': ('django.db.models.fields.DateTimeField', [], {'auto_now_add': 'True', 'blank': 'True'}),
             'id': ('django.db.models.fields.AutoField', [], {'primary_key': 'True'}),
-            'name': ('django.db.models.fields.CharField', [], {'max_length': '500'}),
+            'name': ('django.db.models.fields.CharField', [], {'default': "'melissi'", 'max_length': '500'}),
             'updated': ('django.db.models.fields.DateTimeField', [], {'auto_now': 'True', 'blank': 'True'}),
             'user': ('django.db.models.fields.related.ForeignKey', [], {'to': "orm['auth.User']"})
         }
