@@ -1,9 +1,12 @@
 import hashlib
-import librsync
+import os
+import mimetypes
 
 from django.http import HttpResponse
 from django.core.servers.basehttp import FileWrapper
 from django.conf import settings
+
+import librsync
 
 def calculate_sha256(file_object):
     """ Return the sha256 hexdigest of file_object.
@@ -19,7 +22,7 @@ def calculate_sha256(file_object):
     return h.hexdigest()
 
 def calculate_md5(file_object):
-    """ Return the sha256 hexdigest of file_object.
+    """ Return the md5 hexdigest of file_object.
 
     file_object is a Django File Object
     """
@@ -39,28 +42,43 @@ def patch_file(source, delta):
     delta.seek(0)
     return f
 
-def sendfile(gridfs_file, download_name):
-    """ Input is gridfs file object """
+def basic_sendfile(fname, download_name=None):
+    if not os.path.exists(fname):
+        raise Http404
 
-    if getattr(settings,'SENDFILE',False):
-        response = HttpResponse(content_type='application/octet-stream')
-        response['X-Sendfile'] = gridfs_file._id
-    else:
-        wrapper = FileWrapper(gridfs_file)
-        response = HttpResponse(wrapper, content_type='application/octet-stream')
-        # required to prevent piston from converting to string the
-        # response object
-        response._is_string = True
+    wrapper = FileWrapper(open(fname,"r"))
 
-    response['Content-Length'] = gridfs_file.length
-    response['Content-Transfer-Encoding'] = 'binary'
-    response['Content-Disposition'] = 'attachment; filename="%s";' % download_name
+    content_type = mimetypes.guess_type(fname)[0]
+    response = HttpResponse(wrapper, content_type=content_type)
+    response['Content-Length'] = os.path.getsize(fname)
+
+    if download_name:
+        response['Content-Disposition'] = "attachment; filename=%s"%download_name
+
+    # required to prevent piston from converting to string the
+    # response object
+    response._is_string = True
 
     return response
 
+def x_sendfile(fname, download_name=None):
+    if not os.path.exists(fname):
+        raise Http404
 
+    content_type = mimetypes.guess_type(fname)[0]
+    response = HttpResponse('', content_type=content_type)
+    response['Content-Length'] = os.path.getsize(fname)
+    response['X-Sendfile'] = fname
 
+    if download_name:
+        response['Content-Disposition'] = "attachment; filename=%s"%download_name
 
+    return response
+
+if getattr(settings,'SENDFILE',False) == 'x_sendfile':
+    sendfile = x_sendfile
+else:
+    sendfile = basic_sendfile
 
 # caution we use our home breweded FileField form item
 # to allow empty files. this is only for CreateForm
