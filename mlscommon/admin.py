@@ -8,7 +8,7 @@ from models import Cell, CellRevision, \
 class CellRevisionInline(admin.TabularInline):
     model = CellRevision
     fk_name = 'cell'
-    ordering = ("-number",)
+
 
 class CellAdmin(admin.ModelAdmin):
     inlines = [CellRevisionInline]
@@ -23,6 +23,8 @@ class DropletRevisionInline(admin.TabularInline):
 
 class DropletAdmin(admin.ModelAdmin):
     inlines = [DropletRevisionInline]
+    list_display = ("id", "name", "owner", "cell")
+    list_display_links = ("id", "name",)
 
 admin.site.register(Droplet, DropletAdmin)
 
