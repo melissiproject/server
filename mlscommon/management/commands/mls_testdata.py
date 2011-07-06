@@ -21,7 +21,7 @@ class Command(BaseCommand):
         f.write('12345')
         f.seek(0)
 
-        User.objects.all().delete()
+        User.objects.filter(is_superuser=False).delete()
 
         u = User.objects.create_user("melisi", "seadog@sealabs.net", "123")
         u.first_name = u"Νίκος"
