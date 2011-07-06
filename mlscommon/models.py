@@ -5,23 +5,21 @@ from django.contrib.auth.models import User
 from django.core.files.storage import FileSystemStorage
 from django.core.validators import MinLengthValidator
 from django.core.exceptions import ValidationError
+from django.db import IntegrityError
 from django.conf import settings
 from mptt.models import MPTTModel
 
 import hashlib
 from datetime import datetime
+from common import calculate_sha256
 
 def calculate_upload_path(instance, filename):
-    return "%s" % (instance.droplet.id)
-
-def calculate_hash(descriptor):
-    digest = hashlib.sha256()
-    while True:
-        r = descriptor.read(10240)
-        if not r: break
-        digest.update(r)
-
-    return digest.hexdigest()
+    if isinstance(instance, Droplet):
+        return "%s" % (instance.name)
+    elif isinstance(instance, DropletRevision):
+        return "%s" % (instance.droplet.id)
+    else:
+        raise Exception("Cannot calculate upload path")
 
 class PatchValidator(object):
     def __call__(self, value):
@@ -39,17 +37,27 @@ class Cell(MPTTModel):
     updated = models.DateTimeField(auto_now=True)
     parent = models.ForeignKey('self',
                                null=True, blank=True,
+                               default=None,
                                related_name='children')
     revisions = models.PositiveIntegerField(default=0)
 
     def __unicode__(self):
         return "[%s:%s]" % (self.id, self.name)
 
+    @property
+    def pid(self):
+        """ return parent_id """
+        if self.parent:
+            return self.parent.id
+        else:
+            return None
+
     @classmethod
     def _first_revision_creator(self, sender, instance, **kwargs):
         if instance.cellrevision_set.count() == 0:
             # create first revision
             revision = CellRevision(cell=instance,
+                                    name = instance.name,
                                     resource=instance.owner.userresource_set.all()[0],
                                     parent=instance.parent,
                                     number=1)
@@ -86,13 +94,18 @@ class Cell(MPTTModel):
         self.deleted=True
         self.save()
 
-models.signals.post_save.connect(Cell._first_revision_creator, sender=Cell)
+    @classmethod
+    def _revision_count(self, sender, instance, **kwargs):
+        instance.revisions = instance.cellrevision_set.count()
 
+models.signals.post_save.connect(Cell._first_revision_creator, sender=Cell)
+models.signals.pre_save.connect(Cell._revision_count, sender=Cell)
 
 class CellRevision(models.Model):
     cell = models.ForeignKey(Cell)
-    name = models.CharField(max_length=500, null=True, blank=True)
+    name = models.CharField(max_length=500, default=None, null=True, blank=True)
     parent = models.ForeignKey(Cell, null=True, blank=True,
+                               default=None,
                                related_name='revision_parent')
     number = models.PositiveIntegerField()
     resource = models.ForeignKey("UserResource")
@@ -100,22 +113,37 @@ class CellRevision(models.Model):
 
     class Meta:
         unique_together = (('cell', 'number'),)
+        get_latest_by = "number"
+        ordering = ("-number",)
+
+    def clean(self):
+        if self.name == '':
+            self.name = None
 
     @classmethod
     def _update_cell(self, sender, instance, **kwargs):
-        """ when a cellrevision is added, update cell with new values """
-        if instance.name:
-            instance.cell.name = instance.name
+        """
+        Always get latest revision and set values. Used when adding
+        new or when deleting the latest
 
-        if instance.parent:
-            instance.cell.parent = instance.parent
+        """
+        try:
+            rev = instance.cell.cellrevision_set.latest()
+        except Cell.DoesNotExist:
+            # when delering the cell, safe to return
+            return
 
-        # increase number of revisions
-        instance.cell.revisions += 1
+        if rev.name:
+            instance.cell.name = rev.name
+
+        if rev.parent:
+            instance.cell.parent = rev.parent
 
         instance.cell.save()
 
 models.signals.post_save.connect(CellRevision._update_cell, sender=CellRevision)
+models.signals.post_delete.connect(CellRevision._update_cell,
+                                   sender=CellRevision)
 
 class Share(models.Model):
     cell = models.ForeignKey(Cell)
@@ -132,6 +160,11 @@ class Share(models.Model):
 
     class Meta:
         unique_together = (('cell', 'user'),)
+        get_latest_by = "number"
+
+    @classmethod
+    def _clean_share(self, sender, instance, **kwargs):
+        instance.clean()
 
     def clean(self):
         if self.cell.owner == self.user:
@@ -154,6 +187,8 @@ class Share(models.Model):
     def __unicode__(self):
         return "[%s:%s]" % (self.cell, self.user)
 
+models.signals.pre_save.connect(Share._clean_share, sender=Share)
+
 class Droplet(models.Model):
     name = models.CharField(max_length=500)
     created = models.DateTimeField(auto_now_add=True)
@@ -162,18 +197,18 @@ class Droplet(models.Model):
     cell = models.ForeignKey(Cell)
     deleted = models.BooleanField(default=False)
     content = models.FileField(
-        storage=FileSystemStorage(location='/tmp/melissi-sandbox'),
+        storage=FileSystemStorage(location=settings.MELISSI_STORE_LOCATION),
         upload_to=calculate_upload_path,
-        blank=True,
-        null=True)
+        blank=False,
+        null=False)
     patch = models.FileField(
-        storage=FileSystemStorage(location='/tmp/melisi-sandbox/patches/'),
+        storage=FileSystemStorage(location=settings.MELISSI_STORE_LOCATION),
         upload_to=calculate_upload_path,
         blank=True,
         null=True,
         validators=[PatchValidator()]
         )
-    content_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    content_sha256 = models.CharField(max_length=64, null=False, blank=False)
     patch_sha256 = models.CharField(max_length=64, null=True, blank=True)
     revisions = models.PositiveIntegerField(default=0)
 
@@ -195,12 +230,32 @@ class Droplet(models.Model):
         if instance.dropletrevision_set.count() == 0:
             # create first revision
             revision = DropletRevision(droplet=instance,
+                                       name = instance.name,
+                                       content = instance.content,
+                                       patch = instance.patch,
+                                       content_sha256 = instance.content_sha256,
+                                       patch_sha256 = instance.patch_sha256,
                                        resource=instance.owner.userresource_set.all()[0],
                                        cell=instance.cell,
                                        number=1)
             revision.save()
 
+    @classmethod
+    def _revision_count(self, sender, instance, **kwargs):
+        if isinstance(instance, Droplet):
+            instance.revisions = instance.dropletrevision_set.count()
+
+        elif isinstance(instance, DropletRevision):
+            try:
+                instance.droplet.revisions = instance.droplet.dropletrevision_set.count()
+                instance.droplet.save()
+            except Droplet.DoesNotExist:
+                # we are deleting the droplet, ignore
+                return
+
 models.signals.post_save.connect(Droplet._first_revision_creator, sender=Droplet)
+models.signals.pre_save.connect(Droplet._revision_count, sender=Droplet)
+
 
 class DropletRevision(models.Model):
     droplet = models.ForeignKey(Droplet)
@@ -210,62 +265,96 @@ class DropletRevision(models.Model):
     number = models.PositiveIntegerField()
     cell = models.ForeignKey(Cell, blank=True, null=True)
     content = models.FileField(
-        storage=FileSystemStorage(location='/tmp/melissi-sandbox'),
+        storage=FileSystemStorage(location=settings.MELISSI_STORE_LOCATION),
         upload_to=calculate_upload_path,
         blank=True,
+        default=None,
         null=True)
     patch = models.FileField(
-        storage=FileSystemStorage(location='/tmp/melisi-sandbox/patches/'),
+        storage=FileSystemStorage(location=settings.MELISSI_STORE_LOCATION),
         upload_to=calculate_upload_path,
         blank=True,
         null=True,
+        default=None,
         validators=[PatchValidator()]
         )
-    content_sha256 = models.CharField(max_length=64, null=True, blank=True)
-    patch_sha256 = models.CharField(max_length=64, null=True, blank=True)
+    content_sha256 = models.CharField(max_length=64, default=None,
+                                      null=True, blank=True)
+    patch_sha256 = models.CharField(max_length=64, default=None,
+                                    null=True, blank=True)
 
     class Meta:
         unique_together = (('droplet', 'number'),)
+        get_latest_by = "number"
+        ordering = ("number",)
+
+    @classmethod
+    def _clean_dropletrevision(self, sender, instance, **kwargs):
+        instance.clean()
 
     def clean(self):
-        if self.content and not self.content_sha256:
-            self.content_sha256 = calculate_hash(self.content)
-
-        elif not self.content and self.content_sha256:
+        if self.content_sha256 == '':
             self.content_sha256 = None
 
-        if self.patch and not self.patch_sha256:
-            self.patch_sha256 = calculate_hash(self.patch)
-
-        elif not self.patch and self.patch_sha256:
+        if self.patch_sha256 == '':
             self.patch_sha256 = None
+
+        if self.content and not self.content_sha256:
+            raise ValidationError("Cannot have content without content sha256")
+
+        elif self.content and self.content_sha256:
+            # verify hash
+            if str(self.content_sha256) != calculate_sha256(self.content):
+                raise ValidationError("Hashes do not match")
+
+
+        # TODO patch match by applied before hash checking
+        # if self.patch and not self.patch_sha256:
+        #     raise ValidationError("Cannot have patch without patch sha256")
+
+        # elif self.patch and self.patch_sha256:
+        #     # verify hash
+        #     if self.patch_sha256 != calculate_hash(self.patch):
+        #         raise ValidationError("Hashes do not match")
 
         return super(DropletRevision, self).clean()
 
     @classmethod
     def _update_droplet(self, sender, instance, **kwargs):
-        """ when a dropletrevision is added, update droplet with new values """
-        if instance.name:
-            instance.droplet.name = instance.name
+        """
+        Always get latest revision and set values. Used when adding
+        new or when deleting the latest
 
-        if instance.cell:
-            instance.droplet.cell = instance.cell
+        """
+        try:
+            rev = instance.droplet.dropletrevision_set.latest()
+        except Droplet.DoesNotExist:
+            # when deleting the droplet, safe to return
+            return
 
-        if instance.content:
-            instance.droplet.content = instance.content
-            instance.droplet.content_sha256 = instance.content_sha256
+        if rev.name:
+            instance.droplet.name = rev.name
 
-        if instance.patch:
-            instance.droplet.patch = instance.patch
-            instance.droplet.patch_sha256 = instance.patch_sha256
+        if rev.cell:
+            instance.droplet.cell = rev.cell
 
-        # increase number of revisions
-        instance.droplet.revisions += 1
+        if rev.content:
+            instance.droplet.content = rev.content
+            instance.droplet.content_sha256 = rev.content_sha256
+
+        if rev.patch:
+            instance.droplet.patch = rev.patch
+            instance.droplet.patch_sha256 = rev.patch_sha256
 
         instance.droplet.save()
 
 models.signals.post_save.connect(DropletRevision._update_droplet,
                                  sender=DropletRevision)
+models.signals.post_delete.connect(DropletRevision._update_droplet,
+                                   sender=DropletRevision)
+models.signals.pre_save.connect(DropletRevision._clean_dropletrevision,
+                                sender=DropletRevision)
+models.signals.post_delete.connect(Droplet._revision_count, sender=DropletRevision)
 
 
 class UserResource(models.Model):
@@ -274,8 +363,9 @@ class UserResource(models.Model):
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
 
-    class Meta:
-        unique_together = (('name', 'user'),)
+    # TODO with mysql innodb and utf8 :(
+    # class Meta:
+    #     unique_together = (('name', 'user'),)
 
     def __unicode__(self):
         return "[%s:%s]" % (self.user, self.name)
