@@ -1,4 +1,3 @@
-
 """
 
 The order of the decorators should be as follows:
@@ -62,29 +61,43 @@ def check_read_permission(function, self, request, *args, **kwargs):
     else:
         raise APIForbidden("Permission denied")
 
+
+def _check_write_permission(user, cell):
+    if cell.owner == user:
+        return True
+
+    else:
+        shares = Share.objects.filter(Q(cell__in=cell.get_ancestors()) |\
+                                      Q(cell=cell)).filter(user=user, mode=1)
+
+        if shares:
+            return True
+
+        else:
+            return False
+
 @decorator
 def check_write_permission(function, self, request, *args, **kwargs):
-    cell = None
+    cells = []
     new_root_cell = False
 
     if isinstance(self, DropletHandler):
         if request.META['REQUEST_METHOD'] == 'POST':
             # this is a CREATE command, the cell to put the droplet into
             # is in the POSTED parameters
-            cell = Cell.objects.get(pk=request.POST.get('cell', None))
+            cells.append(Cell.objects.get(pk=request.POST.get('cell', None)))
 
         else:
             obj = Droplet.objects.get(pk=kwargs.get('droplet_id', None))
-            cell = obj.cell
+            cells.append(obj.cell)
 
     elif isinstance(self, DropletRevisionHandler):
-        # if this is a "move" then fetch the cell to move into
-        if 'cell' in request.POST:
-            cell = Cell.objects.get(pk=request.POST.get('cell', None))
+        obj = Droplet.objects.get(pk=kwargs.get('droplet_id', None))
+        cells.append(obj.cell)
 
-        else:
-            obj = Droplet.objects.get(pk=kwargs.get('droplet_id', None))
-            cell = obj.cell
+        # if this is a "move" then also fetch the cell to move into
+        if 'cell' in request.POST:
+            cells.append(Cell.objects.get(pk=request.POST.get('cell', None)))
 
     elif isinstance(self, CellHandler):
         if request.META['REQUEST_METHOD'] == 'POST':
@@ -93,45 +106,37 @@ def check_write_permission(function, self, request, *args, **kwargs):
             if not request.POST.get('parent', None):
                 new_root_cell = True
             else:
-                cell = Cell.objects.get(pk=request.POST.get('parent'))
+                cells.append(Cell.objects.get(pk=request.POST.get('parent')))
         else:
-            # if this is a "move" then fetch the cell to move into
+            cells.append(Cell.objects.get(pk=kwargs.get('cell_id', None)))
+
+            # if this is a "move" then also fetch the cell to move into
             if 'parent' in request.POST:
-                cell = Cell.objects.get(pk=kwargs.get('parent', None))
-            else:
-                cell = Cell.objects.get(pk=kwargs.get('cell_id', None))
+                cells.append(Cell.objects.get(pk=request.POST.get('parent', None)))
 
     elif isinstance(self, CellShareHandler):
-        cell = Cell.objects.get(pk=args[0])
+        cell = Cell.objects.get(pk=kwargs.get('cell_id', None))
+        cells.append(cell)
+        if kwargs.get('user_id', None):
+            # this a refering to a specific user. Only user and owner
+            # can view / edit
+            user_id = int(kwargs.get('user_id'))
+            if not (user_id == request.user.id or request.user.id == cell.owner.id):
+                # empty cells so check fails
+                cells = []
 
     if new_root_cell:
         return function(self, request, *args, **kwargs)
 
-    elif cell:
-        print '%%'
-        print cell
-        print cell.owner
-        print request.user
-        print '%%'
-
-        if cell.owner == request.user:
-            return function(self, request, *args, **kwargs)
-
-        else:
-            shares = Share.objects.filter(Q(cell__in=cell.get_ancestors()) |\
-                                          Q(cell=cell)).filter(user=request.user,
-                                                               mode=1)
-
-            print '***', shares, shares.count()
-            if shares:
-                print '((('
-                return function(self, request, *args, **kwargs)
-
-            else:
+    elif cells:
+        for cell in cells:
+            if not _check_write_permission(request.user, cell):
                 raise APIForbidden("Permission denied")
 
-    else:
-        raise APIForbidden("Permission denied")
+        else:
+            return function(self, request, *args, **kwargs)
+
+    raise APIForbidden("Permission denied")
 
 @decorator
 def add_server_timestamp(function, self, request, *args, **kwargs):
@@ -159,7 +164,6 @@ class ResourceForm(forms.ModelForm):
         super(ResourceForm, self).__init__(*args, **kwargs)
 
     def clean_resource(self):
-        print self.cleaned_data.get('resource')
         resource, created =  UserResource.objects.get_or_create(
             name = self.cleaned_data.get('resource', 'melissi'),
             user = self._user
@@ -187,18 +191,25 @@ def _recursive_update_shares(cell, user):
         parent = cell.share_set.get(user=user).parent
 
     shares = Share.objects.filter(Q(cell__in=parent.get_ancestors()) |\
-                                  Q(cell=c))
+                                  Q(cell=parent))
+
     if shares.count():
         share_root = shares[0].cell
-
         # locate share of current user to we can copy name and mode
-        share = shares.get(user=user)
+        try:
+            share = shares.get(user=user)
+        except Share.DoesNotExist:
+            # user was not in share, he's owner
+            share = None
 
-        for s in cell.share_set.all():
+        for s in Share.objects.filter(Q(cell__in=cell.get_descendants()) |\
+                                      Q(cell=cell)):
             s.cell = share_root
-            s.mode = share.mode
-            s.name = share.name
+            if share:
+                s.mode = share.mode
+                s.name = share.name
             s.save()
+
             number_of_shares_created +=1
 
     return number_of_shares_created
@@ -415,14 +426,12 @@ class CellUpdateForm(ResourceForm):
 
 class CellHandler(BaseHandler):
     """
-    TODO
-    _recursive_update_shares
-    conflict resolving
+
     """
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
     fields = ('pk','name', 'owner', 'pid',
-              'created', 'updated', 'deleted',
+              'created', 'updated', 'deleted', 'revisions',
               )
 
     @add_server_timestamp
@@ -492,10 +501,6 @@ class CellHandler(BaseHandler):
                 share.parent = form.instance.parent or share.parent
                 share.save()
 
-                # TODO
-                # if the new parent tree is shared with others then:
-                # _recursive_update_shares(cell, request.user)
-
                 # change cell.name and cell.parent according to share
                 # used only to return values, do NOT save
                 cell.name = share.name
@@ -513,8 +518,11 @@ class CellHandler(BaseHandler):
                     # find if any parent is shared, and if yes set all shares
                     # updated time
                     Share.objects.filter(
-                        cell__in=cell.get_ancestors
+                        cell__in=cell.get_ancestors()
                         ).update(updated=datetime.now())
+
+            # # if the new parent tree is shared with others then:
+            # _recursive_update_shares(cell, request.user)
 
         return cell
 
@@ -568,7 +576,9 @@ class CellShareHandler(BaseHandler):
 
         form.save()
 
-        return form.instance
+        # _recursive_update_shares(cell, request.user)
+
+        return rc.CREATED
 
     @add_server_timestamp
     @watchdog_notfound
@@ -590,13 +600,13 @@ class CellShareHandler(BaseHandler):
 
             # user if not owner and tries to delete another user from
             # share
-            if user != share_root.owner and user != request.user:
+            if request.user != share_root.owner and user != request.user:
                 raise APIForbidden("You don't have permission to delete "
                                    "user '%s'" % user)
 
             else:
                 # delete own share
-                share_root.share_set.filter(user=request.user).delete()
+                share_root.share_set.filter(user=user).delete()
 
         else:
             # only owner can delete everything
@@ -779,7 +789,6 @@ class UserHandler(BaseHandler):
         """
 
         user = User.objects.get(pk=user_id)
-
         if request.user.is_staff or request.user.is_superuser or user == request.user:
             form = UserUpdateForm(request.POST)
             if not form.is_valid():
@@ -787,7 +796,6 @@ class UserHandler(BaseHandler):
 
             user.set_password(form.cleaned_data['password'])
             user.save()
-
             return user
 
         else:
