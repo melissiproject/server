@@ -25,6 +25,7 @@ class DropletAdmin(admin.ModelAdmin):
     inlines = [DropletRevisionInline]
     list_display = ("id", "name", "owner", "cell")
     list_display_links = ("id", "name",)
+    search_fields = ("name",)
 
 admin.site.register(Droplet, DropletAdmin)
 
