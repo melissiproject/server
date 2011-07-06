@@ -19,7 +19,7 @@ urlpatterns = patterns(
     '',
     (r'^cell/(?P<cell_id>\d+)/$', cell_handler),
     (r'^cell/(?P<cell_id>\d+)/share/$', cell_share_handler),
-    (r'^cell/(?P<cell_id>\d+)/share/(?P<user_id>\d+)/$', cell_share_handler),
+    (r'^cell/(?P<cell_id>\d+)/share/(?P<username>[\w.@+-]+)/$', cell_share_handler),
     (r'^cell/$', cell_handler),
 
     (r'^droplet/$', droplet_handler),

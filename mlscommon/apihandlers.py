@@ -571,13 +571,13 @@ class CellShareHandler(BaseHandler):
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
-    def create(self, request, cell_id, user_id):
+    def create(self, request, cell_id, username):
         """
         If user not in shared_with add him. If user in shared_with
         update entry
         """
         cell = Cell.objects.get(pk=cell_id)
-        user = User.objects.get(pk=user_id)
+        user = User.objects.get(username=username)
         cell_share, created = Share.objects.get_or_create(cell=cell, user=user)
         form = CellShareCreateForm(request.POST, instance=cell_share)
 
@@ -594,7 +594,7 @@ class CellShareHandler(BaseHandler):
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
-    def delete(self, request, cell_id, user_id=None):
+    def delete(self, request, cell_id, username=None):
         cell = Cell.objects.get(pk=cell_id)
         try:
             share_root = Share.objects.filter(
@@ -605,8 +605,8 @@ class CellShareHandler(BaseHandler):
             # cell is not shared, nothing to delete
             raise APIBadRequest("Cell or Tree not shared")
 
-        if user_id:
-            user = User.objects.get(pk=user_id)
+        if username:
+            user = User.objects.get(username=username)
 
             # user if not owner and tries to delete another user from
             # share
@@ -670,7 +670,7 @@ class StatusHandler(BaseHandler):
             cell.name = share.name
             cell.parent = share.parent
 
-            if share.created >= timestamp:
+            if share.updated >= timestamp:
                 # this is a new share, force add everything
                 map(lambda x: status_cells.append(x),
                     share.cell.get_descendants())
@@ -686,7 +686,7 @@ class StatusHandler(BaseHandler):
             else:
                 # this is an old share, add only new stuff
                 map(lambda x: status_cells.append(x),
-                    share.cell.get_descendants().filter(updated_gte=timestamp)
+                    share.cell.get_descendants().filter(updated__gte=timestamp)
                     )
                 if share.cell.updated >= timestamp:
                     status_cells.append(cell)
