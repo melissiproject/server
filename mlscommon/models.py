@@ -50,7 +50,7 @@ class Cell(MPTTModel):
         if self.parent:
             return self.parent.id
         else:
-            return None
+            return False
 
     @classmethod
     def _first_revision_creator(self, sender, instance, **kwargs):
