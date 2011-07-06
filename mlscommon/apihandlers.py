@@ -36,10 +36,14 @@ import common
 @decorator
 def check_read_permission(function, self, request, *args, **kwargs):
     cell = None
+
     if isinstance(self, DropletHandler) or \
-       isinstance(self, DropletRevisionHandler) or \
-       isinstance(self, DropletRevisionDataHandler):
+       isinstance(self, DropletRevisionHandler):
         obj = Droplet.objects.get(pk=args[0])
+        cell = obj.cell
+
+    elif isinstance(self, DropletRevisionDataHandler):
+        obj = Droplet.objects.get(pk=args[1])
         cell = obj.cell
 
     elif isinstance(self, CellHandler) or isinstance(self, CellShareHandler):
@@ -364,6 +368,12 @@ class DropletRevisionDataHandler(BaseHandler):
         return common.sendfile(path, name)
 
 class DropletCreateForm(ResourceForm):
+    # caution we use our home brewed FileField form item to allow
+    # empty files. this is only for CreateForm to be changed when this
+    # code gets merged into django main
+    # http://code.djangoproject.com/ticket/13584
+    content = common.myFileField(required=True, allow_empty_file=True)
+
     class Meta:
         model = Droplet
         fields = ('name', 'cell', 'content', 'content_sha256')
@@ -430,7 +440,7 @@ class CellHandler(BaseHandler):
     """
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('pk','name', 'owner', 'pid',
+    fields = ('id', 'name', 'owner', 'pid',
               'created', 'updated', 'deleted', 'revisions',
               )
 
@@ -658,7 +668,7 @@ class StatusHandler(BaseHandler):
         for share in shares:
             cell = share.cell
             cell.name = share.name
-            cell.panret = share.parent
+            cell.parent = share.parent
 
             if share.created >= timestamp:
                 # this is a new share, force add everything
