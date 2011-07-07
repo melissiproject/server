@@ -19,6 +19,7 @@ PACKAGES = {
     'postgresql':'psycopg2',
     'librsync':'-e git://github.com/melissiproject/librsync.git#egg=librsync',
     'django-piston':'-e git://github.com/django-piston/django-piston.git#egg=django-piston',
+    'gunicorn':'gunicorn',
     }
 
 
@@ -55,7 +56,7 @@ def upgrade():
     # restart script with --install
     os.execv(sys.argv[0], (sys.argv[0], "--install",))
 
-def install(mysql=False, postgresql=False):
+def install(mysql=False, postgresql=False, gunicorn=False):
     _printer("Installing Packages: ")
 
     basic_packages = ('django', 'south', 'django-mptt',
@@ -73,6 +74,10 @@ def install(mysql=False, postgresql=False):
     if postgresql:
         _printer("postgresql, ")
         _install(PACKAGES['postgresql'])
+
+    if gunicorn:
+        _printer("gunicorn, ")
+        _install(PACKAGES['gunicorn'])
 
     _printer("", newline=True)
     _printer("Environment built successfully")
@@ -99,6 +104,11 @@ def main():
                       action="store_true",
                       default=False,
                       )
+    parser.add_option("--gunicorn",
+                      help="Add gunicorn server",
+                      actions="store_true",
+                      default=False,
+                      )
 
     (options, _) = parser.parse_args()
 
@@ -111,14 +121,16 @@ def main():
                  "Use --help for instructions")
 
     if options.upgrade:
-        if (options.mysql or options.postgresql):
+        if (options.mysql or options.postgresql or options.gunicorn):
             sys.exit("--upgrade can't be combined with other options")
 
         else:
           upgrade()
 
     elif options.install:
-        install(mysql=options.mysql, postgresql=options.postgresql)
+        install(mysql=options.mysql,
+                postgresql=options.postgresql,
+                gunicorn=options.gunicorn)
 
 if __name__ == "__main__":
     main()
