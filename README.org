@@ -1,29 +1,29 @@
-Melissi Cloud Storage Server
-
-* About
+* Melissi Cloud Storage Server
+** About
   Melissi is a cloud storage server written in [[http://djangoproject.org][Django]]. Is an effort to
   create a FLOSS alternative to other known proprietary cloud storage
   services, such as [[http://www.dropbox.com][Dropbox]] and [[http://one.ubuntu.com][UbuntuOne]].
 
   Melissi Server features a clean /API/ (written in [[https://bitbucket.org/jespern/django-piston/wiki/Home][Django Piston]]) to
-  store and retrieve data. Melissi Desktop Client uses this API to
+  store and retrieve data. [[http://github.com/melissiproject/client/][Melissi Desktop Client]] uses this API to
   synchronize your local computer files with the server (and the so
-  called "cloud")
+  called "cloud"). Other applications can be developed and use melissi
+  as a storage backend.
 
-* Installing
-  Melissi is /alpha/ software but you can already install your own
-  instance aka /hive/ to help us test and develop more and faster.
+** Installing
+   Melissi is /alpha/ software but you can already install your own
+   instance aka /hive/ to help us test and develop more and faster.
 
-  For installation instructions and more documentation about /melissi/
-  please visit [[http://melissi.readthedocs.org][our docs at readthedocs.org]]
+   For installation instructions and more documentation about /melissi/
+   please visit [[http://melissi.readthedocs.org][our docs at readthedocs.org]]
 
-* Community
- - [[http://www.melissi.org][Melissi Website]]
- - [[http://www.twitter.com/melissiproject][@melissiproject]] twitter
- - #melissiproject on freenode
- - [[http://lists.melissi.org/cgi-bin/mailman/listinfo/melissi-announce][melissi-announce]] mailing list for the news
+** Community
+  - [[http://www.melissi.org][Melissi Website]]
+  - [[http://www.twitter.com/melissiproject][@melissiproject]] twitter
+  - #melissiproject on freenode
+  - [[http://lists.melissi.org/cgi-bin/mailman/listinfo/melissi-announce][melissi-announce]] mailing list for the news
 
-* Contributing
- - Submit code on [[http://www.github.com/melissiproject][github]]
- - Submit bugs on [[https://github.com/melissiproject/server/issues][github server issues]]
- - [[http://lists.melissi.org/cgi-bin/mailman/listinfo/melissi-dev][melissi-dev]] mailing list for development
+** Contributing
+  - Submit code on [[http://www.github.com/melissiproject][github]]
+  - Submit bugs on [[https://github.com/melissiproject/server/issues][github server issues]]
+  - [[http://lists.melissi.org/cgi-bin/mailman/listinfo/melissi-dev][melissi-dev]] mailing list for development
