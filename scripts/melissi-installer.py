@@ -106,7 +106,7 @@ def main():
                       )
     parser.add_option("--gunicorn",
                       help="Add gunicorn server",
-                      actions="store_true",
+                      action="store_true",
                       default=False,
                       )
 
