@@ -28,17 +28,19 @@ def _install(pkg):
     COMMAND = "pip -E env install %s"
     status, output = commands.getstatusoutput(COMMAND % pkg)
 
+    _printer(output, fileonly=True)
 
     if status != 0:
         sys.exit("Failed while installing %s "
                  "Checking %s for details" % (pkg, LOGFILE)
                  )
 
-def _printer(text, newline=False):
-    print text,
+def _printer(text, newline=False, fileonly=False):
+    if not fileonly:
+        print text,
 
-    if newline:
-        print ""
+        if newline:
+            print ""
 
     with open(LOGFILE, "a+") as f:
         f.write(text)
