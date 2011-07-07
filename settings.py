@@ -138,7 +138,3 @@ AUTH_PROFILE_MODULE = 'vrscommon.UserProfile'
 APPEND_SLASH = True
 
 from local_settings import *
-
-
-if not MELISSI_STORE_LOCATION:
-    raise ValueError("You must set MELISSI_STORE_LOCATION")
