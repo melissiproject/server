@@ -19,7 +19,7 @@
 
 ** Community
   - [[http://www.melissi.org][Melissi Website]]
-  - [[http://www.twitter.com/melissiproject][@melissiproject]] twitter
+  - [[http://www.twitter.com/melissiproject][@melissiproject]] twitter and [[http://identi.ca/melissiproject][identi.ca]]
   - #melissiproject on freenode
   - [[http://lists.melissi.org/cgi-bin/mailman/listinfo/melissi-announce][melissi-announce]] mailing list for the news
 
