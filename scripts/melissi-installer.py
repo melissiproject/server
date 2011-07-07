@@ -57,7 +57,8 @@ def install(mysql=False, postgresql=False):
     _printer("Installing Packages: ")
 
     basic_packages = ('django', 'south', 'django-mptt',
-                      'django-extensions', 'librsync')
+                      'django-extensions', 'librsync',
+                      'django-piston')
 
     for pkg in basic_packages:
         _printer("%s, " % pkg)
