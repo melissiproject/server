@@ -320,6 +320,9 @@ You can run your hive in *test* mode using django's internal webserver.
       The communication between your hive and clients will not be
       encrypted.
 
+   Now you can visit your administration interface at
+   http://localhost:8000/admin/ and login using your superuser
+   account.
 
 
 Real Setup: Nginx and Gunicorn
