@@ -15,25 +15,25 @@ PACKAGES = {
     'south':'south',
     'django-mptt':'django-mptt',
     'django-extensions':'django_extensions',
-    'mysql':'PyMySQL',
+    'mysql':'mysql-python',
     'postgresql':'psycopg2',
     'librsync':'-e git://github.com/melissiproject/librsync.git#egg=librsync',
     'django-piston':'-e git://github.com/django-piston/django-piston.git#egg=django-piston',
     'gunicorn':'gunicorn',
     }
-
+PIPCOMMAND = "pip-python" if os.path.exists("/usr/bin/pip-python") else "pip"
 
 def _install(pkg):
     # execute command,
     # silence output export only errors to install.log
-    COMMAND = "pip -E env install %s"
+    COMMAND = "%s -E env install %s" % PIPCOMMAND
     status, output = commands.getstatusoutput(COMMAND % pkg)
 
     _printer(output, fileonly=True)
 
     if status != 0:
-        sys.exit("Failed while installing %s "
-                 "Checking %s for details" % (pkg, LOGFILE)
+        sys.exit("Failed while installing %s. "
+                 "Check %s for details" % (pkg, LOGFILE)
                  )
 
 def _printer(text, newline=False, fileonly=False):
@@ -52,9 +52,14 @@ def _printer(text, newline=False, fileonly=False):
 
 def upgrade():
     # upgrade git
+    _printer("Updating source")
+    status, output = commands.getstatusoutput("git pull origin master")
 
-    # restart script with --install
-    os.execv(sys.argv[0], (sys.argv[0], "--install",))
+    _printer(output, fileonly=True)
+
+    if status != 0:
+        sys.exit("Failed update source. "
+                 "Check %s for details" % (LOGFILE))
 
 def install(mysql=False, postgresql=False, gunicorn=False):
     _printer("Installing Packages: ")
