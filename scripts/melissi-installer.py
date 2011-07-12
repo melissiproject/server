@@ -26,7 +26,7 @@ PIPCOMMAND = "pip-python" if os.path.exists("/usr/bin/pip-python") else "pip"
 def _install(pkg):
     # execute command,
     # silence output export only errors to install.log
-    COMMAND = "%s -E env install %s" % PIPCOMMAND
+    COMMAND = "%s -E env install %s" % (PIPCOMMAND, "%s")
     status, output = commands.getstatusoutput(COMMAND % pkg)
 
     _printer(output, fileonly=True)
