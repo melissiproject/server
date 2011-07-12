@@ -23,7 +23,7 @@ class DropletRevisionInline(admin.TabularInline):
 
 class DropletAdmin(admin.ModelAdmin):
     inlines = [DropletRevisionInline]
-    list_display = ("id", "name", "owner", "cell")
+    list_display = ("id", "name", "owner", "cell", "deleted")
     list_display_links = ("id", "name",)
     search_fields = ("name",)
 
