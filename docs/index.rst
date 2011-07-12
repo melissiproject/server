@@ -102,6 +102,23 @@ To install your own hive:
 
      ~$ su -c "yum install git"
 
+4. **Install librsync**
+
+   To reduce bandwidth needs librsync is used for calculating
+   patches. You need to install librsync development libraries to
+   build python-librsync module.
+
+   - For *Debian* systems
+
+   ::
+
+   ~$ sudo apt-get install librsync-dev
+
+   - For *Fedora* systems
+
+   ::
+
+   ~$ su -c "yum install librsync-devel"
 
      .. _extra-packages:
 4. **Installing Extra Packages** (Optional)
