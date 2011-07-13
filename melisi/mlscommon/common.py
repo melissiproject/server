@@ -2,7 +2,7 @@ import hashlib
 import os
 import mimetypes
 
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from django.core.servers.basehttp import FileWrapper
 from django.conf import settings
 
