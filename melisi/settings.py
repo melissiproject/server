@@ -133,7 +133,7 @@ LOGGING = {
     }
 }
 
-AUTH_PROFILE_MODULE = 'vrscommon.UserProfile'
+AUTH_PROFILE_MODULE = 'mlscommon.UserProfile'
 
 APPEND_SLASH = True
 
