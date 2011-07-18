@@ -15,7 +15,7 @@
    instance aka /hive/ to help us test and develop more and faster.
 
    For installation instructions and more documentation about /melissi/
-   please visit [[http://melissi-server.readthedocs.org/][our docs at readthedocs.org]]
+   please visit [[http://melissi-server.readthedocs.org/][our docs at readthedocs.org]].
 
 ** Community
   - [[http://www.melissi.org][Melissi Website]]
