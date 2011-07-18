@@ -6,6 +6,7 @@ from django.core.files.storage import FileSystemStorage
 from django.core.validators import MinLengthValidator
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
+from django.db.models import Sum, Q
 from django.conf import settings
 from mptt.models import MPTTModel
 
@@ -278,10 +279,24 @@ class DropletRevision(models.Model):
         default=None,
         validators=[PatchValidator()]
         )
-    content_sha256 = models.CharField(max_length=64, default=None,
-                                      null=True, blank=True)
-    patch_sha256 = models.CharField(max_length=64, default=None,
-                                    null=True, blank=True)
+    content_sha256 = models.CharField(max_length=64,
+                                      default=None,
+                                      null=True,
+                                      blank=True
+                                      )
+    patch_sha256 = models.CharField(max_length=64,
+                                    default=None,
+                                    null=True,
+                                    blank=True
+                                    )
+    content_size = models.PositiveIntegerField(blank=True,
+                                               null=True,
+                                               default=None
+                                               )
+    patch_size = models.PositiveIntegerField(blank=True,
+                                             null=True,
+                                             default=None
+                                             )
 
     class Meta:
         unique_together = (('droplet', 'number'),)
@@ -319,6 +334,21 @@ class DropletRevision(models.Model):
 
         return super(DropletRevision, self).clean()
 
+    def save(self, *args, **kwargs):
+        try:
+            self.content_size = self.content.size
+        except ValueError:
+            # no content for this revision, don't worry
+            self.content_size = None
+
+        try:
+            self.patch_size = self.patch.size
+        except ValueError:
+            # no patch for this revision, don't worry
+            self.patch_size = None
+
+        return super(DropletRevision, self).save(*args, **kwargs)
+
     @classmethod
     def _update_droplet(self, sender, instance, **kwargs):
         """
@@ -348,10 +378,12 @@ class DropletRevision(models.Model):
 
         instance.droplet.save()
 
+# update droplet
 models.signals.post_save.connect(DropletRevision._update_droplet,
                                  sender=DropletRevision)
 models.signals.post_delete.connect(DropletRevision._update_droplet,
                                    sender=DropletRevision)
+
 models.signals.pre_save.connect(DropletRevision._clean_dropletrevision,
                                 sender=DropletRevision)
 models.signals.post_delete.connect(Droplet._revision_count, sender=DropletRevision)
@@ -372,10 +404,80 @@ class UserResource(models.Model):
 
 class UserProfile(models.Model):
     user = models.ForeignKey(User, unique=True)
-    quota = models.PositiveIntegerField(default=settings.MELISSI_QUOTA)
+    personal_quota = models.PositiveIntegerField(default=0)
+    shared_quota = models.PositiveIntegerField(default=0)
+    quota_limit = models.PositiveIntegerField(default=settings.MELISSI_QUOTA)
 
     def __unicode__(self):
         return unicode(self.user)
+
+    @property
+    def quota(self):
+        quota = self.personal_quota
+        if settings.MELISSI_QUOTA_COUNT_SHARED:
+            quota += self.shared_quota
+        return quota
+
+    @property
+    def space_left(self):
+        space_left = self.quota_limit - self.personal_quota
+        if settings.MELISSI_QUOTA_COUNT_SHARED:
+            space_left -= self.shared_quota
+
+        return space_left if space_left > 0 else 0
+
+    def calculate_quota(self):
+        self.personal_quota = Droplet.objects.filter(owner=self.user).\
+                              aggregate(quota=Sum('dropletrevision__content_size'))\
+                              ['quota'] or 0
+
+        return self.personal_quota
+
+    def calculate_shared_quota(self):
+        shares = Share.objects.filter(user=self.user)
+        self.shared_quota = 0
+
+        for share in shares:
+            cell = share.cell
+            self.shared_quota +=\
+                 Droplet.objects.filter(Q(cell__in = cell.get_descendants())|\
+                                        Q(cell = cell)).\
+                                        aggregate(quota=Sum('dropletrevision__content_size'))\
+                                        ['quota'] or 0
+
+        return self.shared_quota
+
+    @classmethod
+    def _update_quota(self, sender, instance, **kwargs):
+        if isinstance(instance, Droplet):
+            try:
+                user = instance.owner
+            except User.DoesNotExist:
+                # we are deleting user. no need to count share, skip
+                return
+            profile = user.get_profile()
+
+        profile.calculate_quota()
+
+        # if droplet is in a shared tree, update shared_quota as well
+        try:
+            shared_cell = Share.objects.get(Q(cell=instance.cell)|\
+                                            Q(cell__in=instance.cell.get_ancestors())
+                                            )
+        except Share.DoesNotExist:
+            # not shared
+            pass
+
+        else:
+            self.calculate_shared_quota()
+
+        profile.save()
+
+# update quota
+models.signals.post_save.connect(UserProfile._update_quota,
+                                 sender=Droplet)
+models.signals.post_delete.connect(UserProfile._update_quota,
+                                 sender=Droplet)
 
 def user_post_save(sender, instance, **kwargs):
     """
