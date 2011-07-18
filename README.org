@@ -1,6 +1,6 @@
 * Melissi Cloud Storage Server
 ** About
-  Melissi is a cloud storage server written in [[http://djangoproject.org][Django]]. Is an effort to
+  Melissi is a cloud storage server written in [[http://djangoproject.org/][Django]]. Is an effort to
   create a FLOSS alternative to other known proprietary cloud storage
   services, such as [[http://www.dropbox.com][Dropbox]] and [[http://one.ubuntu.com][UbuntuOne]].
 
