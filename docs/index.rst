@@ -121,7 +121,7 @@ To install your own hive:
    ~$ su -c "yum install librsync-devel"
 
      .. _extra-packages:
-4. **Installing Extra Packages** (Optional)
+4. **Install Extra Packages** (Optional)
 
    Because we are building melissi inside a virtual enviroment you
    will need to download some extra packages to be able to compile
