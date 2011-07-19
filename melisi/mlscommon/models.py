@@ -218,7 +218,7 @@ class Droplet(models.Model):
         size = self.dropletrevision_set.aggregate(content_size=Sum('content_size'),
                                                   patch_size=Sum('patch_size')
                                                   )
-        return size['content_size'] or 0 + size['patch_size'] or 0
+        return (size['content_size'] or 0) + (size['patch_size'] or 0)
 
     def set_deleted(self):
         # set deleted
