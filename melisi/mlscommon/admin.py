@@ -24,10 +24,22 @@ class DropletRevisionInline(admin.TabularInline):
 
 class DropletAdmin(admin.ModelAdmin):
     inlines = [DropletRevisionInline]
-    list_display = ("id", "name", "owner", "cell", "deleted")
+    list_display = ("id", "name", "owner", "cell",
+                    "content_size", "overall_size", "deleted")
     list_display_links = ("id", "name",)
-    search_fields = ("name",)
+    search_fields = ("name", "owner__username")
     list_filter = ("deleted",)
+
+    def content_size(self, obj):
+        size = "%.2f" % (obj.content.size / 1024)
+        return size if size != "0.00" else "~0.00"
+    content_size.short_description = "Content Size (MiB)"
+
+    def overall_size(self, obj):
+        size = "%.2f" % (obj.overall_size() / 1024)
+        return size if size != "0.00" else "~0.00"
+    overall_size.short_description = "Overall Size (MiB)"
+
 
 admin.site.register(Droplet, DropletAdmin)
 
