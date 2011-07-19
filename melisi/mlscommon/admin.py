@@ -31,12 +31,12 @@ class DropletAdmin(admin.ModelAdmin):
     list_filter = ("deleted",)
 
     def content_size(self, obj):
-        size = "%.2f" % (obj.content.size / 1048576)
+        size = "%.2f" % (1.0 * obj.content.size / 1048576)
         return size if size != "0.00" else "~0.00"
     content_size.short_description = "Content Size (MiB)"
 
     def overall_size(self, obj):
-        size = "%.2f" % (obj.overall_size() / 1048576)
+        size = "%.2f" % (1.0 * obj.overall_size() / 1048576)
         return size if size != "0.00" else "~0.00"
     overall_size.short_description = "Overall Size (MiB)"
 
