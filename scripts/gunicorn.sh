@@ -6,7 +6,7 @@ LOGFILE=$INSTALLDIR/logs/melissi.log
 NUM_WORKERS=3
 USER=melissi
 GROUP=melissi
-SOCKET="unix:$INSTALLDIR/sockets/$1"
+SOCKET="unix:$INSTALLDIR/sockets/melissi.sock"
 
 
 if [ ! -d "$INSTALLDIR/logs" ]; then
