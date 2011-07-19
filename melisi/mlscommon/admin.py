@@ -27,6 +27,7 @@ class DropletAdmin(admin.ModelAdmin):
     list_display = ("id", "name", "owner", "cell", "deleted")
     list_display_links = ("id", "name",)
     search_fields = ("name",)
+    list_filter = ("deleted",)
 
 admin.site.register(Droplet, DropletAdmin)
 
