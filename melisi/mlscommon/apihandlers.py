@@ -350,22 +350,16 @@ class DropletRevisionDataHandler(BaseHandler):
 
             # find the revision with the latest content entry with
             # revision_number less than or equal to revision_number
-            data = getattr(droplet.dropletrevision_set.filter(content_sha256__isnull=False,
+            fileobj = getattr(droplet.dropletrevision_set.filter(content_sha256__isnull=False,
                                                               number__lte=revision_number)[0],
                            type)
 
         else:
             revision = droplet.dropletrevision_set.latest()
             name = droplet.name
-            data = getattr(droplet, type)
+            fileobj = getattr(droplet, type)
 
-        try:
-            path = data.path
-
-        except ValueError:
-            raise APINotFound("Droplet '%s' has no '%s'" % (droplet_id, type))
-
-        return common.sendfile(path, name)
+        return common.sendfile(fileobj, name)
 
 class DropletCreateForm(ResourceForm):
     # caution we use our home brewed FileField form item to allow

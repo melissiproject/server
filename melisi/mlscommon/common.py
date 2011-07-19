@@ -42,15 +42,16 @@ def patch_file(source, delta):
     delta.seek(0)
     return f
 
-def basic_sendfile(fname, download_name=None):
-    if not os.path.exists(fname):
+def basic_sendfile(fileobj, download_name=None):
+    if not os.path.exists(fileobj.path):
         raise Http404
 
-    wrapper = FileWrapper(open(fname,"r"))
+    wrapper = FileWrapper(open(fileobj.path,"r"))
 
-    content_type = mimetypes.guess_type(fname)[0]
+    content_type = mimetypes.guess_type(fileobj.path)[0]
     response = HttpResponse(wrapper, content_type=content_type)
-    response['Content-Length'] = os.path.getsize(fname)
+    response['Content-Length'] = os.path.getsize(fileobj.path)
+    response['Content-Type'] = content_type or 'application/octet-stream'
 
     if download_name:
         response['Content-Disposition'] = "attachment; filename=%s"%download_name
@@ -61,22 +62,43 @@ def basic_sendfile(fname, download_name=None):
 
     return response
 
-def x_sendfile(fname, download_name=None):
-    if not os.path.exists(fname):
+def adv_sendfile(send_type, fileobj, download_name=None):
+    if not os.path.exists(fileobj.path):
         raise Http404
 
-    content_type = mimetypes.guess_type(fname)[0]
+    content_type = mimetypes.guess_type(fileobj.path)[0]
     response = HttpResponse('', content_type=content_type)
-    response['Content-Length'] = os.path.getsize(fname)
-    response['X-Sendfile'] = fname
+    response['Content-Length'] = os.path.getsize(fileobj.path)
+    response['Content-Type'] = content_type or 'application/octet-stream'
+
+    if send_type == 'sendfile':
+        response['X-Sendfile'] = fileobj.path
+
+    elif send_type =='accel-redirect':
+        # nginx
+        response['X-Accel-Redirect'] = '/storage/%s' % fileobj.name
+
+    else:
+        raise ValueError("bad send_type attribute")
 
     if download_name:
-        response['Content-Disposition'] = "attachment; filename=%s"%download_name
+        response['Content-Disposition'] = "attachment; filename=%s " %\
+                                          download_name
 
     return response
 
-if getattr(settings,'SENDFILE',False) == 'x_sendfile':
+def x_sendfile(fileobj, download_name=None):
+    return adv_sendfile('sendfile', fileobj, download_name)
+
+def accel_sendfile(fileobj, download_name=None):
+    return adv_sendfile('accel-redirect', fileobj, download_name)
+
+if getattr(settings, 'SENDFILE', False) == 'sendfile':
     sendfile = x_sendfile
+
+elif getattr(settings, 'SENDFILE', False) == 'accel-redirect':
+    sendfile = accel_sendfile
+
 else:
     sendfile = basic_sendfile
 
