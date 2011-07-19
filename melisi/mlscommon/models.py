@@ -85,13 +85,6 @@ class Cell(MPTTModel):
     def set_deleted(self):
         # set children cells and droplets to deleted
         self.get_descendants().update(deleted=True, updated=datetime.now())
-        Droplet.objects.filter(cell__in=self.get_descendants()).update(deleted=True,
-                                                                       updated=datetime.now())
-
-        # set self and own droplets to deleted
-        Droplet.objects.filter(cell=self).update(deleted=True,
-                                                 updated=datetime.now())
-
         self.deleted=True
         self.save()
 
@@ -303,6 +296,9 @@ class DropletRevision(models.Model):
         get_latest_by = "number"
         ordering = ("number",)
 
+    def __unicode__(self):
+        return unicode(self.id)
+
     @classmethod
     def _clean_dropletrevision(self, sender, instance, **kwargs):
         instance.clean()
@@ -428,6 +424,7 @@ class UserProfile(models.Model):
 
     def calculate_quota(self):
         self.personal_quota = Droplet.objects.filter(owner=self.user).\
+                              filter(deleted=False).\
                               aggregate(quota=Sum('dropletrevision__content_size'))\
                               ['quota'] or 0
 
@@ -442,6 +439,7 @@ class UserProfile(models.Model):
             self.shared_quota +=\
                  Droplet.objects.filter(Q(cell__in = cell.get_descendants())|\
                                         Q(cell = cell)).\
+                                        filter(deleted=False).\
                                         aggregate(quota=Sum('dropletrevision__content_size'))\
                                         ['quota'] or 0
 
@@ -451,18 +449,27 @@ class UserProfile(models.Model):
     def _update_quota(self, sender, instance, **kwargs):
         if isinstance(instance, Droplet):
             try:
-                user = instance.owner
-            except User.DoesNotExist:
-                # we are deleting user. no need to count share, skip
+                cell = instance.cell
+            except Cell.DoesNotExist:
+                # cell already deleted
                 return
-            profile = user.get_profile()
+
+        elif isinstance(instance, Cell):
+            cell = instance
+
+        try:
+            user = instance.owner
+        except User.DoesNotExist:
+            # we are deleting user. no need to count share, skip
+            return
+        profile = user.get_profile()
 
         profile.calculate_quota()
 
         # if droplet is in a shared tree, update shared_quota as well
         try:
-            shared_cell = Share.objects.get(Q(cell=instance.cell)|\
-                                            Q(cell__in=instance.cell.get_ancestors())
+            shared_cell = Share.objects.get(Q(cell=cell)|\
+                                            Q(cell__in=cell.get_ancestors())
                                             )
         except Share.DoesNotExist:
             # not shared
@@ -478,6 +485,10 @@ models.signals.post_save.connect(UserProfile._update_quota,
                                  sender=Droplet)
 models.signals.post_delete.connect(UserProfile._update_quota,
                                  sender=Droplet)
+models.signals.post_save.connect(UserProfile._update_quota,
+                                 sender=Cell)
+models.signals.post_delete.connect(UserProfile._update_quota,
+                                 sender=Cell)
 
 def user_post_save(sender, instance, **kwargs):
     """
@@ -491,7 +502,9 @@ def user_post_save(sender, instance, **kwargs):
     if created:
         profile.save()
 
-    resource, created = UserResource.objects.get_or_create(user=instance)
+    resource, created = UserResource.objects.get_or_create(user=instance,
+                                                           name="melissi"
+                                                           )
     if created:
         resource.save()
 
