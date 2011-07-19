@@ -76,7 +76,10 @@ def adv_sendfile(send_type, fileobj, download_name=None):
 
     elif send_type =='accel-redirect':
         # nginx
-        response['X-Accel-Redirect'] = '/storage/%s' % fileobj.name
+        response['X-Accel-Redirect'] =\
+                        '%s/%s' % (getattr(settings, 'ACCEL_REDIRECT_PATH', ''),
+                                   fileobj.name
+                                   )
 
     else:
         raise ValueError("bad send_type attribute")

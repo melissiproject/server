@@ -27,6 +27,11 @@ MELISSI_STORE_LOCATION = None
 # 'accel-redirect' for nginx
 SENDFILE=False
 
+# When using the 'accel-redirect' SENDFILE you have to set the
+# ACCEL_REDIRECT_PATH variable to match the path Nginx expects.
+# Read more on http://wiki.nginx.org/XSendfile
+# ACCEL_REDIRECT_PATH='/storage'
+
 DEBUG=True
 PISTON_DISPLAY_ERRORS=DEBUG
 
