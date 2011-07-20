@@ -320,10 +320,6 @@ You can run your hive in *test* mode using django's internal webserver.
 Real Setup: Nginx and Gunicorn
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. warning::
-
-   This section is incomplete
-
 1. **Install and Setup Gunicorn**
 
    Copying from `Gunicorn's <http://gunicorn.org>`_ website:
