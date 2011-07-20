@@ -73,15 +73,11 @@ To install your own hive:
    projects / installs you may have on your server. PIP is a package
    manager for python.
 
-   - For *Debian* systems
-
-     ::
+   - For *Debian* systems::
 
      ~$ sudo apt-get install python-pip python-virtualenv
 
-   - For *Fedora* system
-
-     ::
+   - For *Fedora* system::
 
      ~$ su -c "yum install python-pip python-virtualenv"
 
@@ -90,15 +86,11 @@ To install your own hive:
    We use git to version our code. To get the latest melissi source
    code you need to install git.
 
-   - For *Debian* systems
-
-     ::
+   - For *Debian* systems::
 
      ~$ sudo apt-get install git
 
-   - For *Fedora* systems
-
-     ::
+   - For *Fedora* systems::
 
      ~$ su -c "yum install git"
 
@@ -108,20 +100,16 @@ To install your own hive:
    patches. You need to install librsync development libraries to
    build python-librsync module.
 
-   - For *Debian* systems
+   - For *Debian* systems::
 
-   ::
+     ~$ sudo apt-get install librsync-dev
 
-   ~$ sudo apt-get install librsync-dev
+   - For *Fedora* systems::
 
-   - For *Fedora* systems
+     ~$ su -c "yum install librsync-devel"
 
-   ::
-
-   ~$ su -c "yum install librsync-devel"
-
-     .. _extra-packages:
-4. **Install Extra Packages** (Optional)
+   .. _extra-packages:
+5. **Install Extra Packages** (Optional)
 
    Because we are building melissi inside a virtual enviroment you
    will need to download some extra packages to be able to compile
@@ -130,62 +118,46 @@ To install your own hive:
    - **Mysql on Debian Systems**
 
      Install python development files, needed to build python mysql
-     connector.
-
-       ::
+     connector::
 
        ~$ sudo apt-get install python-dev
 
-     Install MySQL
-
-       ::
+     Install MySQL::
 
        ~$ sudo apt-get install mysql-server libmysqlclient-dev
 
-   - **PosteSQL on Debian Systems**
+   - **PostgreSQL on Debian Systems**
 
      Install python and postgresql development files, needed to build
-     python postgresql connector.
-
-       ::
+     python postgresql connector::
 
        ~$ sudo apt-get install python-dev
 
-     Install PostgreSQL
-
-       ::
+     Install PostgreSQL::
 
        ~$ sudo apt-get install postgresql libpg-dev
 
    - **Mysql on Fedora**
 
      Install python development files, needed to build python mysql
-     connector.
-
-       ::
+     connector::
 
        ~$ su -c "yum install python-devel"
 
-     Install MySQL
+     Install MySQL::
 
-       ::
-
-       ~$ su -c "yum install mysql mysql-devel"
+       ~$ su -c "yum install mysql-server mysql-devel"
 
    - **PosteSQL on Fedora**
 
      Install python and postgresql development files, needed to build
-     python postgresql connector.
-
-       ::
+     python postgresql connector::
 
        ~$ su -c "yum install python-devel"
 
-     Install PostgreSQL
+     Install PostgreSQL::
 
-       ::
-
-       ~$ su -c "yum install postgresql postgresql-devel"
+       ~$ su -c "yum install postgresql-server postgresql-devel"
 
 
 Getting Melissi Source
@@ -193,16 +165,12 @@ Getting Melissi Source
 
 You can get the source from our git repository.
 
-1. Move to the directory you want to install melissi
-
-   ::
+1. Move to the directory you want to install melissi::
 
    ~$ mkdir /srv/melissi
    ~$ cd /srv/melissi
 
-2. Fetch the source code
-
-   ::
+2. Fetch the source code::
 
    ~$ git clone git://github.com/melissiproject/server.git
 
@@ -249,9 +217,9 @@ in file local_settings.py.
 
 1. **Copy settings template**
 
-  ::
+   ::
 
-  ~$ cp local_settings.py.example local_settings.py
+   ~$ cp local_settings.py.example local_settings.py
 
 2. **Edit using you favorite editor local_settings.py**
 
@@ -261,6 +229,18 @@ in file local_settings.py.
      `Django's documentation on Databases
      <https://docs.djangoproject.com/en/dev/ref/settings/#databases>`_
      if you need more help.
+
+     .. note::
+
+        When using MySQL or PostgreSQL you need to create a database
+        first. You also need to grant permissions to your database
+        user to access the database
+
+	Use *mysqladmin* command to create MySQL databases
+
+	::
+
+	~$ mysqladmin -u root -p create melissi
 
    - **Set SECRET_KEY**
 
@@ -284,16 +264,11 @@ in file local_settings.py.
      Set either to *True* or *False* if you want or not other to be
      able to create accounts on your hive.
 
-3. **Setup the database**
+3. **Setup the database**::
 
-   ::
-
-   ~$ source env/bin/activate
-
-   ::
-
-   (env)~$ python manage.py syncdb
-   (env)~$ python manage.py migrate mlscommon
+      ~$ source env/bin/activate
+      (env)~$ python manage.py syncdb
+      (env)~$ python manage.py migrate mlscommon
 
 
    .. warning::
@@ -349,22 +324,207 @@ Real Setup: Nginx and Gunicorn
 
    This section is incomplete
 
-1. **gunicorn**
+1. **Install and Setup Gunicorn**
 
-   ::
+   Copying from `Gunicorn's <http://gunicorn.org>`_ website:
 
-   ~$ cd /path/you/installed/melissi
-   ~$ pip -E env install gunicorn
+     'Green Unicorn' is a Python WSGI HTTP Server for UNIX. It's a
+     pre-fork worker model ported from Ruby's Unicorn project. The
+     Gunicorn server is broadly compatible with various web frameworks,
+     simply implemented, light on server resources, and fairly speedy.
 
-2. **nginx**
+   1. **Install**::
 
-   1. **install**
-   2. **setup**
-   3. **ssl** (optional but recommended)
+      ~$ cd /path/you/installed/melissi
+      ~$ ./scripts/melissi-installer.py --install --gunicorn
+
+   2. **Setup**
+
+      Edit */path/you/installed/melissi/scripts/gunicorn.sh* to fit
+      your needs and paths.
+
+2. **Install and Setup Nginx**
+
+   1. **Install**
+
+      - For *Debian* systems::
+
+   	~$ sudo apt-get install nginx
+
+      - For *Fedora* system::
+
+	~$ su -c "yum install nginx"
+
+   2. **Setup with SSL** (recommended)
+
+      1. Generate an SSL certificate:
+
+	.. note::
+
+	   If you have a certificate already you can skip this
+	   step. Make sure that you set correctly the paths in the
+	   next step so nginx can locate your certificate
+
+	::
+
+	  ~$ sudo -s
+	  ~# cd /etc/nginx
+	  ~# sudo mkdir /etc/nginx/ssl
+	  ~# cd ssl
+
+	  # create private key
+	  ~# openssl genrsa -des3 -out melissi.key 1024
+
+	  # create a CSR (Certificate Signing Request)
+	  ~# openssl req -new -key melissi.key -out melissi.csr
+
+	  # optionally remove th passphrase from you key
+	  # so nginx can start without a password
+	  ~# cp melissi.key melissi.key.bah
+	  ~# openssl rsa -in melissi.key.bak -out melissi.key
+
+	  # create a CRT
+	  ~# openssl x509 -req -days 365 -in melissi.csr -signkey melissi.key -out melissi.crt
 
 
-3. **Install supervisor**
+        Now your key and self-signed certificated are located in::
 
+	  /etc/nginx/ssl/melissi.key
+	  /etc/nginx/ssl/melissi.crt
+
+      2. Create */etc/nginx/sites-availables/melissi* with the following contents::
+
+          upstream app_server_melissi {
+	  	  # should match your paths
+                  server unix:///srv/melissi/sockets/melissi.sock fail_timeout=0;
+          }
+
+          server {
+             server_name example.com;
+             listen *:8000 default ssl;
+
+             ssl_certificate ssl/melissi.crt;
+             ssl_certificate_key ssl/melissi.key;
+
+             # should match your paths
+             access_log /srv/melissi/logs/nginx.access.log;
+             error_log /srv/melissi/logs/nginx.error.log;
+
+             # set this to the maximum file size allowed in your hive
+             client_max_body_size 100m;
+
+             location  /static/admin/ {
+                   # should match your paths
+                   alias /srv/melissi/server/env/lib/python2.6/site-packages/django/contrib/admin/media/;
+                   expires 30d;
+                   add_header Cache-Control public;
+             }
+
+             location /storage/ {
+                   internal;
+                   # should match your paths
+                   alias /srv/storage/;
+             }
+
+             location / {
+                   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                   proxy_set_header Host $http_host;
+                   proxy_set_header X-Forwarded-Protocol ssl;
+                   proxy_redirect off;
+                   proxy_pass http://app_server_melissi;
+              }
+	  }
+
+   3. **Setup without SSL** (not recommended)
+
+      .. warning::
+
+	   The communication between your clients and the server will
+	   be unecrypted. Your passwords and data will be viewable by
+	   others.
+
+      Create */etc/nginx/sites-availables/melissi* with the following contents::
+
+          upstream app_server_melissi {
+	  	  # should match your paths
+                  server unix:///srv/melissi/sockets/melissi.sock fail_timeout=0;
+          }
+
+          server {
+             server_name example.com;
+             listen *:8000;
+
+             # should match your paths
+             access_log /srv/melissi/logs/nginx.access.log;
+             error_log /srv/melissi/logs/nginx.error.log;
+
+             # set this to the maximum file size allowed in your hive
+             client_max_body_size 100m;
+
+             location  /static/admin/ {
+                   # should match your paths
+                   alias /srv/melissi/server/env/lib/python2.6/site-packages/django/contrib/admin/media/;
+                   expires 30d;
+                   add_header Cache-Control public;
+             }
+
+             location /storage/ {
+                   internal;
+                   # should match your paths
+                   alias /srv/storage/;
+             }
+
+             location / {
+                   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                   proxy_set_header Host $http_host;
+                   proxy_redirect off;
+                   proxy_pass http://app_server_melissi;
+              }
+	  }
+
+
+   4. **Enable the site**::
+
+        ~$ sudo ln -s /etc/nginx/sites-available/melissi ln -s /etc/nginx/sites-enabled/melissi
+
+   5. **Check configuration**::
+
+	~$ sudo /etc/init.d/nginx configtest
+
+3. **Install and Setup Supervisor**
+
+   1. **Install**::
+
+      ~$ sudo apt-get install supervisor
+
+   2. **Setup**
+
+      Create */etc/supervisor/conf.d/melissi.conf* with the following contents::
+
+	[program:melissi]
+	directory = /srv/melissi/server/melisi/
+	user = melissi
+	command = /srv/melissi/server/scripts/gunicorn.sh
+	autostart=true
+	autorestart=true
+	redirect_stderr=True
+
+      .. warning::
+
+	   Make sure that the paths match your installation
+
+   3. **Load new config**
+
+      ::
+
+      ~$ sudo /etc/init.d/supervisor force-reload
+
+4. Start services::
+
+   ~$ sudo supervisorctl start melissi
+   ~$ sudo /etc/init.d/nginx reload
+
+5. Enjoy your hive!
 
 Updating Your Hive
 ------------------
