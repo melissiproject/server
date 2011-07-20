@@ -464,6 +464,7 @@ Real Setup: Nginx and Gunicorn
                    add_header Cache-Control public;
              }
 
+	     # /storage will be used in melissi configuration
              location /storage/ {
                    internal;
                    # should match your paths
@@ -515,12 +516,23 @@ Real Setup: Nginx and Gunicorn
 
       ~$ sudo /etc/init.d/supervisor force-reload
 
-4. Start services::
+4. **Configure your Hive**
+
+   Some configuration is needed so that your Hive can take advantage
+   of `Nginx's X-Accel-Redirect <http://wiki.nginx.org/XSendfile>`_
+   directive.
+
+   Open *local_settings.py* and set::
+
+    SENDFILE='accel-redirect'
+    ACCEL_REDIRECT_PATH='/storage' # or whichever value you used in your nginx configuration
+
+5. Start services::
 
    ~$ sudo supervisorctl start melissi
    ~$ sudo /etc/init.d/nginx reload
 
-5. Enjoy your hive!
+6. Enjoy your hive!
 
 Updating Your Hive
 ------------------
