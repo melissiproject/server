@@ -135,7 +135,7 @@ To install your own hive:
 
      Install PostgreSQL::
 
-       ~$ sudo apt-get install postgresql libpg-dev
+       ~$ sudo apt-get install postgresql libpq-dev
 
    - **Mysql on Fedora**
 
