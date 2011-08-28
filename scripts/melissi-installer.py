@@ -21,15 +21,15 @@ PACKAGES = {
     'django-piston':'-e git://github.com/django-piston/django-piston.git#egg=django-piston',
     'gunicorn':'gunicorn',
     }
-PIPCOMMAND = "pip-python" if os.path.exists("/usr/bin/pip-python") else "pip"
+
+PIPCOMMAND = "./env/bin/pip"
 
 def _install(pkg):
     # execute command,
     # silence output export only errors to install.log
-    COMMAND = "%s -E env install %s" % (PIPCOMMAND, "%s")
-    status, output = commands.getstatusoutput(COMMAND % pkg)
-
-    _printer(output, fileonly=True)
+    COMMAND = "%s install %s" % (PIPCOMMAND, "%s")
+    status, command_output = commands.getstatusoutput(COMMAND % pkg)
+    _printer(command_output, fileonly=True)
 
     if status != 0:
         sys.exit("Failed while installing %s. "
@@ -62,8 +62,16 @@ def upgrade():
                  "Check %s for details" % (LOGFILE))
 
 def install(mysql=False, postgresql=False, gunicorn=False):
-    _printer("Installing Packages: ")
+    
 
+    VIRTUALENV = "virtualenv --no-site-packages env"
+    _printer("Creating new Virtual Python Environment:")
+    output = commands.getoutput(VIRTUALENV)
+    _printer(output,fileonly=True)
+    _printer("\n")
+
+    _printer("Installing Packages: ")
+    
     basic_packages = ('django', 'south', 'django-mptt',
                       'django-extensions', 'librsync',
                       'django-piston')
@@ -71,7 +79,7 @@ def install(mysql=False, postgresql=False, gunicorn=False):
     for pkg in basic_packages:
         _printer("%s, " % pkg)
         _install(PACKAGES[pkg])
-
+        
     if mysql:
         _printer("mysql, ")
         _install(PACKAGES['mysql'])
