@@ -27,11 +27,11 @@ from piston.handler import BaseHandler, AnonymousBaseHandler
 from piston.utils import rc, FormValidationError
 from piston.decorator import decorator
 
-from models import Droplet, DropletRevision, Cell, CellRevision,\
+from mlscommon.models import Droplet, DropletRevision, Cell, CellRevision,\
      Share, UserResource, UserProfile
 
-from exceptions import APIBadRequest, APIForbidden, APINotFound
-import common
+from mlscommon.exceptions import APIBadRequest, APIForbidden, APINotFound
+import mlscommon.common as common
 
 @decorator
 def check_read_permission(function, self, request, *args, **kwargs):
@@ -430,7 +430,7 @@ class CellUpdateForm(ResourceForm):
 
 class CellHandler(BaseHandler):
     """
-
+    This is the documentation for CellHandler
     """
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
@@ -442,6 +442,9 @@ class CellHandler(BaseHandler):
     @watchdog_notfound
     @check_read_permission
     def read(self, request, cell_id):
+        """
+        This is the documentation for CellHandler read
+        """
         cell = Cell.objects.get(pk=cell_id)
         try:
             share = cell.share_set.get(user=request.user)
@@ -460,6 +463,9 @@ class CellHandler(BaseHandler):
     @check_write_permission
     @transaction.commit_on_success()
     def create(self, request):
+        """
+        This is the documentation for CellHandler create
+        """
         cell = Cell(owner=request.user)
         form = CellCreateForm(request.user, request.POST, instance=cell)
         if not form.is_valid():
@@ -478,6 +484,9 @@ class CellHandler(BaseHandler):
     @check_write_permission
     @transaction.commit_on_success()
     def update(self, request, cell_id):
+        """
+        This is the documentation for CellHandler update
+        """
         cell = Cell.objects.get(pk=cell_id)
         cell_revision = CellRevision(cell=cell)
 
@@ -535,6 +544,9 @@ class CellHandler(BaseHandler):
     @check_write_permission
     @transaction.commit_on_success()
     def delete(self, request, cell_id):
+        """
+        This is the documentation for CellHandler delete
+        """
         cell = Cell.objects.get(pk=cell_id)
         cell.set_deleted()
         return rc.DELETED

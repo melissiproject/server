@@ -14,6 +14,6 @@ urlpatterns = patterns('',
     # Uncomment the next line to enable the admin:
     url(r'^admin/', include(admin.site.urls)),
 
-    # # almighty melisi API
-    url(r'^api/', include('melisi.mlscommon.apiurls')),
+    # almighty melisi API
+    url(r'^api/v1/', include('melisi.mlscommon.api.v1.urls')),
 )
