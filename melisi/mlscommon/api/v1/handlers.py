@@ -32,8 +32,8 @@ from mlscommon.models import Droplet, DropletRevision, Cell, CellRevision,\
 from mlscommon.exceptions import APIBadRequest, APIForbidden, APINotFound
 import mlscommon.common as common
 
-from forms import ResourceForm, DropletRevisionCreateForm, DropletCreateForm, \
-     CellCreateForm, CellUpdateForm, CellShareCreateForm, UserCreateForm
+from views import *
+from forms import *
 
 @decorator
 def check_read_permission(function, self, request, *args, **kwargs):
@@ -145,13 +145,6 @@ def check_write_permission(function, self, request, *args, **kwargs):
     raise APIForbidden("Permission denied")
 
 @decorator
-def add_server_timestamp(function, self, request, *args, **kwargs):
-    # we must log time before executing the function
-    t = time.time()
-    r = function(self, request, *args, **kwargs)
-    return {'timestamp':t, 'reply': r}
-
-@decorator
 def watchdog_notfound(function, self, request, *args, **kwargs):
     try:
         return function(self, request, *args, **kwargs)
@@ -204,25 +197,22 @@ def _recursive_update_shares(cell, user):
 
 class DropletRevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'DELETE')
-    # fields = (('resource', ('name', 'user')), 'created', 'name',
-    #           'content_sha256', 'patch_sha256'
-    #           )
     fields = ('id',)
     models = DropletRevision
 
-    @check_write_permission
+    @check_read_permission
     @watchdog_notfound
-    @add_server_timestamp
     def read(self, request, droplet_id, revision_number=None):
         droplet = Droplet.objects.get(pk=droplet_id)
+
         if revision_number:
             rev = droplet.dropletrevision_set.get(number=revision_number)
         else:
             rev = droplet.dropletrevision_set.latest()
-        return rev
+
+        return DropletRevisionView(rev)
 
     @check_write_permission
-    @add_server_timestamp
     @transaction.commit_on_success()
     def create(self, request, droplet_id):
         droplet = Droplet.objects.get(pk=droplet_id)
@@ -297,7 +287,7 @@ class DropletRevisionHandler(BaseHandler):
 
         form.save()
 
-        return droplet
+        return DropletView(droplet)
 
     @check_write_permission
     @watchdog_notfound
@@ -345,19 +335,14 @@ class DropletRevisionDataHandler(BaseHandler):
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'DELETE')
     model = Droplet
-    # fields = ('id', ('cell', ('name', 'id', ('owner', ('username', 'id', 'email')))),
-    #           'name', ('owner', ('username', 'id', 'email')), 'created', 'updated',
-    #           'deleted', 'content_sha256', 'patch_sha256', 'revisions')
     fields = ('id',)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_read_permission
     def read(self, request, droplet_id):
         droplet = Droplet.objects.get(pk=droplet_id)
-        return droplet
+        return DropletView(droplet)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -377,9 +362,8 @@ class DropletHandler(BaseHandler):
         rev.resource = form.cleaned_data['resource']
         rev.save()
 
-        return form.instance
+        return DropletView(form.instance)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -395,12 +379,8 @@ class CellHandler(BaseHandler):
     """
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    # fields = ('id', 'name', 'owner', 'pid',
-    #           'created', 'updated', 'deleted', 'revisions',
-    #           )
     fields = ('id',)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_read_permission
     def read(self, request, cell_id):
@@ -418,9 +398,8 @@ class CellHandler(BaseHandler):
             # cell is not shared, no worries
             pass
 
-        return cell
+        return CellView(cell)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -439,9 +418,8 @@ class CellHandler(BaseHandler):
         rev.resource = form.cleaned_data['resource']
         rev.save()
 
-        return form.instance
+        return CellView(form.instance)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -481,8 +459,6 @@ class CellHandler(BaseHandler):
                 cell.name = share.name
                 cell.parent = share.parent
 
-                return cell
-
             else:
                 form.save()
 
@@ -499,9 +475,8 @@ class CellHandler(BaseHandler):
             # # if the new parent tree is shared with others then:
             # _recursive_update_shares(cell, request.user)
 
-        return cell
+        return CellView(cell)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -523,16 +498,14 @@ class CellShareHandler(BaseHandler):
     fields = ('id',)
     allowed_methods = ('GET', 'POST', 'DELETE')
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_read_permission
     def read(self, request, cell_id):
         cell = Cell.objects.get(pk=cell_id)
         shares = Share.objects.filter(Q(cell__in=cell.get_ancestors()) |\
                                       Q(cell = cell))
-        return shares
+        return CellShareListView(shares)
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -555,7 +528,6 @@ class CellShareHandler(BaseHandler):
 
         return rc.CREATED
 
-    @add_server_timestamp
     @watchdog_notfound
     @check_write_permission
     @transaction.commit_on_success()
@@ -597,7 +569,6 @@ class CellShareHandler(BaseHandler):
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
 
-    @add_server_timestamp
     def read(self, request, timestamp=None):
         # note that the default timestamp is 24hours
         if not timestamp:
@@ -662,7 +633,7 @@ class StatusHandler(BaseHandler):
                         ).filter(updated__gte=timestamp)
                     )
 
-        return {'cells': status_cells, 'droplets': status_droplets }
+        return CellListView(status_cells), DropletListView(status_droplets)
 
 class ResourceHandler(BaseHandler):
     model = UserResource
@@ -677,7 +648,6 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     # fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
     fields = ('id',)
 
-    @add_server_timestamp
     @transaction.commit_on_success()
     def create(self, request):
         if not getattr(settings, 'MELISSI_REGISTRATIONS_OPEN', False):
@@ -699,7 +669,7 @@ class AnonymousUserHandler(AnonymousBaseHandler):
         user.last_name = form.cleaned_data['last_name']
         user.save()
 
-        return user
+        return UserView(user)
 
 class UserHandler(BaseHandler):
     model = User
@@ -708,9 +678,8 @@ class UserHandler(BaseHandler):
     # fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
     fields = ('id',)
 
-    @add_server_timestamp
     @watchdog_notfound
-    def read(self, request, user_id):
+    def read(self, request, user_id=None):
         if not user_id:
             user = request.user
 
@@ -718,12 +687,11 @@ class UserHandler(BaseHandler):
             user = User.objects.get(pk=user_id)
 
         if request.user.is_staff or request.user.is_superuser or request.user == user:
-            return user
+            return UserView(user)
 
         else:
             raise APIForbidden({'user': "You don't have permission to access user details"})
 
-    @add_server_timestamp
     @watchdog_notfound
     @transaction.commit_on_success()
     def create(self, request):
@@ -743,12 +711,11 @@ class UserHandler(BaseHandler):
             user.last_name = form.cleaned_data['last_name']
             user.save()
 
-            return user
+            return UserView(user)
 
         else:
             raise APIForbidden({'user': "You don't have permission to create new accounts"})
 
-    @add_server_timestamp
     @watchdog_notfound
     @transaction.commit_on_success()
     def update(self, request, user_id):
@@ -764,12 +731,11 @@ class UserHandler(BaseHandler):
 
             user.set_password(form.cleaned_data['password'])
             user.save()
-            return user
+            return UserView(user)
 
         else:
             raise APIForbidden({'user': "You don't have permission to edit user"})
 
-    @add_server_timestamp
     @watchdog_notfound
     @transaction.commit_on_success()
     def delete(self, request, user_id):
