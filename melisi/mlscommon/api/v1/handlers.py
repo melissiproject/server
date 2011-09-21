@@ -14,7 +14,6 @@ import time
 from datetime import datetime, timedelta
 import re
 
-from django import forms
 from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.validators import MinValueValidator
@@ -32,6 +31,9 @@ from mlscommon.models import Droplet, DropletRevision, Cell, CellRevision,\
 
 from mlscommon.exceptions import APIBadRequest, APIForbidden, APINotFound
 import mlscommon.common as common
+
+from forms import ResourceForm, DropletRevisionCreateForm, DropletCreateForm, \
+     CellCreateForm, CellUpdateForm, CellShareCreateForm, UserCreateForm
 
 @decorator
 def check_read_permission(function, self, request, *args, **kwargs):
@@ -160,25 +162,6 @@ def watchdog_notfound(function, self, request, *args, **kwargs):
             print error
         raise APINotFound({'error': "Object not found"})
 
-class ResourceForm(forms.ModelForm):
-    resource = forms.CharField(max_length=500, required=False)
-
-    def __init__(self, user, *args, **kwargs):
-        self._user = user
-        super(ResourceForm, self).__init__(*args, **kwargs)
-
-    def clean_resource(self):
-        resource, created =  UserResource.objects.get_or_create(
-            name = self.cleaned_data.get('resource', 'melissi'),
-            user = self._user
-            )
-        if created:
-            resource.save()
-
-        self.instance.resource = resource
-
-        return resource
-
 def _recursive_update_shares(cell, user):
     """
     """
@@ -218,16 +201,13 @@ def _recursive_update_shares(cell, user):
 
     return number_of_shares_created
 
-class DropletRevisionCreateForm(ResourceForm):
-    class Meta:
-        model = DropletRevision
-        fields = ('name', 'cell', 'content', 'content_sha256', 'number')
 
 class DropletRevisionHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'DELETE')
-    fields = (('resource', ('name', 'user')), 'created', 'name',
-              'content_sha256', 'patch_sha256'
-              )
+    # fields = (('resource', ('name', 'user')), 'created', 'name',
+    #           'content_sha256', 'patch_sha256'
+    #           )
+    fields = ('id',)
     models = DropletRevision
 
     @check_write_permission
@@ -361,23 +341,14 @@ class DropletRevisionDataHandler(BaseHandler):
 
         return common.sendfile(fileobj, name)
 
-class DropletCreateForm(ResourceForm):
-    # caution we use our home brewed FileField form item to allow
-    # empty files. this is only for CreateForm to be changed when this
-    # code gets merged into django main
-    # http://code.djangoproject.com/ticket/13584
-    content = common.myFileField(required=True, allow_empty_file=True)
-
-    class Meta:
-        model = Droplet
-        fields = ('name', 'cell', 'content', 'content_sha256')
 
 class DropletHandler(BaseHandler):
     allowed_methods = ('GET', 'POST', 'DELETE')
     model = Droplet
-    fields = ('id', ('cell', ('name', 'id', ('owner', ('username', 'id', 'email')))),
-              'name', ('owner', ('username', 'id', 'email')), 'created', 'updated',
-              'deleted', 'content_sha256', 'patch_sha256', 'revisions')
+    # fields = ('id', ('cell', ('name', 'id', ('owner', ('username', 'id', 'email')))),
+    #           'name', ('owner', ('username', 'id', 'email')), 'created', 'updated',
+    #           'deleted', 'content_sha256', 'patch_sha256', 'revisions')
+    fields = ('id',)
 
     @add_server_timestamp
     @watchdog_notfound
@@ -418,25 +389,16 @@ class DropletHandler(BaseHandler):
 
         return rc.DELETED
 
-class CellCreateForm(ResourceForm):
-    class Meta:
-        model = Cell
-        fields = ('name', 'parent')
-
-class CellUpdateForm(ResourceForm):
-    class Meta:
-        model = CellRevision
-        fields = ('name', 'parent', 'resource', 'number')
-
 class CellHandler(BaseHandler):
     """
     This is the documentation for CellHandler
     """
     model = Cell
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('id', 'name', 'owner', 'pid',
-              'created', 'updated', 'deleted', 'revisions',
-              )
+    # fields = ('id', 'name', 'owner', 'pid',
+    #           'created', 'updated', 'deleted', 'revisions',
+    #           )
+    fields = ('id',)
 
     @add_server_timestamp
     @watchdog_notfound
@@ -551,17 +513,14 @@ class CellHandler(BaseHandler):
         cell.set_deleted()
         return rc.DELETED
 
-class CellShareCreateForm(forms.ModelForm):
-    class Meta:
-        model = Share
-        fields = ('mode',)
 
 class CellShareHandler(BaseHandler):
     """
     """
 
     model = Share
-    fields = ('user', 'mode', 'name', 'created', 'updated')
+    # fields = ('user', 'mode', 'name', 'created', 'updated')
+    fields = ('id',)
     allowed_methods = ('GET', 'POST', 'DELETE')
 
     @add_server_timestamp
@@ -635,7 +594,6 @@ class CellShareHandler(BaseHandler):
 
         return rc.DELETED
 
-
 class StatusHandler(BaseHandler):
     allowed_methods = ('GET', )
 
@@ -708,23 +666,16 @@ class StatusHandler(BaseHandler):
 
 class ResourceHandler(BaseHandler):
     model = UserResource
-    fields = ('name', 'user', 'created', 'updated')
+    # fields = ('name', 'user', 'created', 'updated')
+    fields = ('id',)
     allowed_methods = tuple()
 
-class UserCreateForm(forms.Form):
-    username = forms.CharField(_('username'), required=True)
-    first_name = forms.CharField(_('first name'), required=True)
-    last_name = forms.CharField(_('last name'), required=True)
-    email = forms.EmailField(_('e-mail address'), required=True)
-    password = forms.CharField(_('password'), required=True)
-
-class UserUpdateForm(forms.Form):
-    password = forms.CharField(_('password'), required=True)
 
 class AnonymousUserHandler(AnonymousBaseHandler):
     model = User
     allowed_methods = ('POST', )
-    fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
+    # fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
+    fields = ('id',)
 
     @add_server_timestamp
     @transaction.commit_on_success()
@@ -754,7 +705,8 @@ class UserHandler(BaseHandler):
     model = User
     anonymous = AnonymousUserHandler
     allowed_methods = ('GET', 'POST', 'PUT', 'DELETE')
-    fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
+    # fields = ('id', 'username', 'email', 'first_name', 'last_name', 'last_login')
+    fields = ('id',)
 
     @add_server_timestamp
     @watchdog_notfound
