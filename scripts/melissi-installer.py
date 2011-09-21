@@ -18,7 +18,6 @@ PACKAGES = {
     'mysql':'mysql-python',
     'postgresql':'psycopg2',
     'librsync':'-e git://github.com/melissiproject/librsync.git#egg=librsync',
-    'django-piston':'-e git://github.com/django-piston/django-piston.git#egg=django-piston',
     'gunicorn':'gunicorn',
     }
 PIPCOMMAND = "pip-python" if os.path.exists("/usr/bin/pip-python") else "pip"
@@ -66,7 +65,7 @@ def install(mysql=False, postgresql=False, gunicorn=False):
 
     basic_packages = ('django', 'south', 'django-mptt',
                       'django-extensions', 'librsync',
-                      'django-piston')
+                      )
 
     for pkg in basic_packages:
         _printer("%s, " % pkg)
