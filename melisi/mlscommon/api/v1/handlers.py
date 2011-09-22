@@ -25,11 +25,12 @@ from django.utils.translation import ugettext_lazy as _
 from piston.handler import BaseHandler, AnonymousBaseHandler
 from piston.utils import rc, FormValidationError
 from piston.decorator import decorator
+from piston.resource import PistonNotFoundException, PistonBadRequestException, \
+     PistonUnauthorizedException
 
 from mlscommon.models import Droplet, DropletRevision, Cell, CellRevision,\
      Share, UserResource, UserProfile
 
-from mlscommon.exceptions import APIBadRequest, APIForbidden, APINotFound
 import mlscommon.common as common
 
 from views import *
@@ -63,9 +64,9 @@ def check_read_permission(function, self, request, *args, **kwargs):
             if shares:
                 return function(self, request, *args, **kwargs)
             else:
-                raise APIForbidden("Permission denied")
+                raise PistonUnauthorizedException("Permission denied")
     else:
-        raise APIForbidden("Permission denied")
+        raise PistonUnauthorizedException("Permission denied")
 
 
 def _check_write_permission(user, cell):
@@ -137,12 +138,12 @@ def check_write_permission(function, self, request, *args, **kwargs):
     elif cells:
         for cell in cells:
             if not _check_write_permission(request.user, cell):
-                raise APIForbidden("Permission denied")
+                raise PistonUnauthorizedException("Permission denied")
 
         else:
             return function(self, request, *args, **kwargs)
 
-    raise APIForbidden("Permission denied")
+    raise PistonUnauthorizedException("Permission denied")
 
 @decorator
 def watchdog_notfound(function, self, request, *args, **kwargs):
@@ -153,7 +154,7 @@ def watchdog_notfound(function, self, request, *args, **kwargs):
     except ObjectDoesNotExist, error:
         if getattr(settings, 'DEBUG', True):
             print error
-        raise APINotFound({'error': "Object not found"})
+        raise PistonNotFoundException('Object not found: %s' % error)
 
 def _recursive_update_shares(cell, user):
     """
@@ -231,11 +232,11 @@ class DropletRevisionHandler(BaseHandler):
                                          instance=revision)
 
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         # check for conflicts
         if form.instance.number > droplet.revisions + 1:
-            raise APIBadRequest({'error':'Wrong revision number'})
+            raise PistonBadRequestException('Wrong revision number')
 
         elif form.instance.number < droplet.revisions + 1:
             # houston we have a conflict
@@ -298,8 +299,8 @@ class DropletRevisionHandler(BaseHandler):
 
         if droplet.dropletrevision_set.count() == 1:
             # cannot delete the last revision
-            raise APIBadRequest("Cannot delete the last revision "
-                                "of droplet %s" % droplet.id)
+            raise PistonBadRequestException("Cannot delete the last revision "
+                                            "of droplet %s" % droplet.id)
 
         revision.delete()
 
@@ -354,7 +355,7 @@ class DropletHandler(BaseHandler):
                                  instance=droplet
                                  )
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         form.save()
 
@@ -410,7 +411,7 @@ class CellHandler(BaseHandler):
         cell = Cell(owner=request.user)
         form = CellCreateForm(request.user, request.POST, instance=cell)
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         form.save()
 
@@ -432,11 +433,11 @@ class CellHandler(BaseHandler):
 
         form = CellUpdateForm(request.user, request.POST, instance=cell_revision)
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         # check for conflicts
         if form.instance.number > cell.revisions + 1:
-            raise APIBadRequest({'error': 'Wrong revision number'})
+            raise PistonBadRequestException('Wrong revision number')
 
         elif form.instance.number < cell.revisions + 1:
             # lower revision number, just ignore
@@ -520,7 +521,7 @@ class CellShareHandler(BaseHandler):
         form = CellShareCreateForm(request.POST, instance=cell_share)
 
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         form.save()
 
@@ -540,7 +541,7 @@ class CellShareHandler(BaseHandler):
                 )[0].cell
         except IndexError:
             # cell is not shared, nothing to delete
-            raise APIBadRequest("Cell or Tree not shared")
+            raise PistonBadRequestException("Cell or Tree not shared")
 
         if username:
             user = User.objects.get(username=username)
@@ -548,8 +549,8 @@ class CellShareHandler(BaseHandler):
             # user if not owner and tries to delete another user from
             # share
             if request.user != share_root.owner and user != request.user:
-                raise APIForbidden("You don't have permission to delete "
-                                   "user '%s'" % user)
+                raise PistonUnauthorizedException("You don't have permission "
+                                                  "to delete user '%s'" % user)
 
             else:
                 # delete own share
@@ -561,8 +562,10 @@ class CellShareHandler(BaseHandler):
                 share_root.share_set.all().delete()
 
             else:
-                raise APIForbidden("You don't have permission to delete "
-                                   "shares of cell %s" % share_root)
+                raise PistonUnauthorizedException("You don't have permission "
+                                                  "to delete "
+                                                  "shares of cell "
+                                                  "%s" % share_root)
 
         return rc.DELETED
 
@@ -578,7 +581,7 @@ class StatusHandler(BaseHandler):
             try:
                 timestamp = datetime.fromtimestamp(float(timestamp))
             except (ValueError, TypeError), error_message:
-                raise APIBadRequest({'timestamp': 'Bad timestamp format'})
+                raise PistonBadRequestException('Bad timestamp format')
 
 
         status_droplets = []
@@ -651,16 +654,16 @@ class AnonymousUserHandler(AnonymousBaseHandler):
     @transaction.commit_on_success()
     def create(self, request):
         if not getattr(settings, 'MELISSI_REGISTRATIONS_OPEN', False):
-            raise APIForbidden({'register': 'Registrations are closed'})
+            raise PistonUnauthorizedException('Registrations are closed')
 
         form = UserCreateForm(request.POST)
 
         if not form.is_valid():
-            raise APIBadRequest(form.errors)
+            raise FormValidationError(form)
 
         if User.objects.filter(Q(username=form.cleaned_data['username']) |\
                                Q(email=form.cleaned_data['email'])).count():
-            raise APIBadRequest({'error': 'email and / or username already exists'})
+            raise PistonBadRequestException('email and / or username already exists')
 
         user = User.objects.create_user(form.cleaned_data['username'],
                                         form.cleaned_data['email'],
@@ -690,7 +693,8 @@ class UserHandler(BaseHandler):
             return UserView(user)
 
         else:
-            raise APIForbidden({'user': "You don't have permission to access user details"})
+            raise PistonUnauthorizedException("You don't have permission to "
+                                              "access user details")
 
     @watchdog_notfound
     @transaction.commit_on_success()
@@ -698,11 +702,11 @@ class UserHandler(BaseHandler):
         if request.user.is_staff or request.user.is_superuser:
             form = UserCreateForm(request.POST)
             if not form.is_valid():
-                raise APIBadRequest(form.errors)
+                raise FormValidationError(form)
 
             if User.objects.filter(Q(username=form.cleaned_data['username']) |\
                                    Q(email=form.cleaned_data['email'])).count():
-                raise APIBadRequest({'error': 'email and / or username already exists'})
+                raise PistonBadRequestException('email and / or username already exists')
 
             user = User.objects.create_user(form.cleaned_data['username'],
                                             form.cleaned_data['email'],
@@ -714,7 +718,8 @@ class UserHandler(BaseHandler):
             return UserView(user)
 
         else:
-            raise APIForbidden({'user': "You don't have permission to create new accounts"})
+            raise PistonUnauthorizedException("You don't have permission to "
+                                              "create new accounts")
 
     @watchdog_notfound
     @transaction.commit_on_success()
@@ -727,14 +732,15 @@ class UserHandler(BaseHandler):
         if request.user.is_staff or request.user.is_superuser or user == request.user:
             form = UserUpdateForm(request.POST)
             if not form.is_valid():
-                raise APIBadRequest(form.errors)
+                raise FormValidationError(form)
 
             user.set_password(form.cleaned_data['password'])
             user.save()
             return UserView(user)
 
         else:
-            raise APIForbidden({'user': "You don't have permission to edit user"})
+            raise PistonUnauthorizedException("You don't have permission "
+                                              "to edit user")
 
     @watchdog_notfound
     @transaction.commit_on_success()
@@ -745,5 +751,5 @@ class UserHandler(BaseHandler):
             return rc.DELETED
 
         else:
-            raise APIForbidden({'user': "You don't have permission to delete "
-                                "user %s" % user.username})
+            raise PistonUnauthorizedException("You don't have permission to "
+                                              "delete user %s" % user.username)

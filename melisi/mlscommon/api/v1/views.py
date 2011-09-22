@@ -90,4 +90,3 @@ class CellShareListView(PistonView):
               lambda x: [CellShareView(y) for y in x],
               destination="shares"),
         ]
-
